@@ -1,0 +1,288 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lexchb/moon_vector/src/core"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+
+// Errors
+pub(all) suberror VectorStoreError {
+  Timeout(timeout_ms~ : Int)
+  Transport(message~ : String)
+  Http(status~ : Int, message~ : String)
+  Server(status~ : Int, message~ : String)
+  Decode(message~ : String)
+  NotFound(resource~ : String)
+  Conflict(message~ : String)
+  Auth(message~ : String)
+  RateLimited(retry_after_ms~ : Int?)
+  InvalidArgument(message~ : String)
+  Unsupported(feature~ : String)
+}
+pub fn VectorStoreError::output(Self, &Logger) -> Unit
+pub fn VectorStoreError::to_string(Self) -> String
+pub impl Show for VectorStoreError
+
+// Types and methods
+pub(all) enum Clause {
+  Cond(condition~ : Condition)
+  Group(filter~ : Filter)
+} derive(Eq)
+pub fn Clause::equal(Self, Self) -> Bool
+pub fn Clause::from_condition(Condition) -> Self
+pub fn Clause::from_filter(Filter) -> Self
+pub fn Clause::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Clause::not_equal(Self, Self) -> Bool
+pub fn Clause::to_json(Self) -> Json
+pub impl ToJson for Clause
+pub impl @json.FromJson for Clause
+
+pub(all) enum Condition {
+  Match(key~ : String, value~ : MatchValue)
+  Range(key~ : String, spec~ : RangeSpec)
+  GeoBoundingBox(key~ : String, box~ : GeoBox)
+  GeoRadius(key~ : String, spec~ : GeoRadiusSpec)
+  ValuesCount(key~ : String, spec~ : ValuesCountSpec)
+  IsEmpty(key~ : String, value~ : Bool)
+  IsNull(key~ : String, value~ : Bool)
+  HasId(ids~ : Array[PointId])
+  Nested(key~ : String, filter~ : Filter)
+} derive(Eq)
+pub fn Condition::equal(Self, Self) -> Bool
+pub fn Condition::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Condition::has_id(Array[PointId]) -> Self
+pub fn Condition::is_empty(String, Bool) -> Self
+pub fn Condition::is_null(String, Bool) -> Self
+pub fn Condition::match_any(String, Array[String]) -> Self
+pub fn Condition::match_bool(String, Bool) -> Self
+pub fn Condition::match_except(String, Array[String]) -> Self
+pub fn Condition::match_int(String, Int) -> Self
+pub fn Condition::match_str(String, String) -> Self
+pub fn Condition::match_text(String, String) -> Self
+pub fn Condition::match_value(String, Json) -> Self
+pub fn Condition::nested(String, Filter) -> Self
+pub fn Condition::not_equal(Self, Self) -> Bool
+pub fn Condition::range(String, gt? : Double, gte? : Double, lt? : Double, lte? : Double) -> Self
+pub fn Condition::to_json(Self) -> Json
+pub fn Condition::values_count(String, gt? : Int, gte? : Int, lt? : Int, lte? : Int) -> Self
+pub impl ToJson for Condition
+pub impl @json.FromJson for Condition
+
+pub(all) enum Distance {
+  Cosine
+  Euclid
+  Dot
+  Manhattan
+} derive(Eq)
+pub fn Distance::equal(Self, Self) -> Bool
+pub fn Distance::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Distance::is_similarity(Self) -> Bool
+pub fn Distance::not_equal(Self, Self) -> Bool
+pub fn Distance::to_json(Self) -> Json
+pub impl ToJson for Distance
+pub impl @json.FromJson for Distance
+
+pub(all) struct Filter {
+  must : Array[Clause]?
+  should : Array[Clause]?
+  must_not : Array[Clause]?
+} derive(Eq, ToJson, @json.FromJson)
+pub fn Filter::empty() -> Self
+pub fn Filter::equal(Self, Self) -> Bool
+pub fn Filter::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Filter::new(must? : Array[Clause], should? : Array[Clause], must_not? : Array[Clause]) -> Self
+pub fn Filter::not_equal(Self, Self) -> Bool
+pub fn Filter::to_json(Self) -> Json
+
+pub(all) struct GeoBox {
+  top_left : GeoPoint
+  bottom_right : GeoPoint
+} derive(Eq, ToJson, @json.FromJson)
+pub fn GeoBox::equal(Self, Self) -> Bool
+pub fn GeoBox::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GeoBox::new(top_left~ : GeoPoint, bottom_right~ : GeoPoint) -> Self
+pub fn GeoBox::not_equal(Self, Self) -> Bool
+pub fn GeoBox::to_json(Self) -> Json
+
+pub(all) struct GeoPoint {
+  lat : Double
+  lon : Double
+} derive(Eq, ToJson, @json.FromJson)
+pub fn GeoPoint::equal(Self, Self) -> Bool
+pub fn GeoPoint::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GeoPoint::new(lat~ : Double, lon~ : Double) -> Self
+pub fn GeoPoint::not_equal(Self, Self) -> Bool
+pub fn GeoPoint::to_json(Self) -> Json
+
+pub(all) struct GeoRadiusSpec {
+  center : GeoPoint
+  radius : Double
+} derive(Eq, ToJson, @json.FromJson)
+pub fn GeoRadiusSpec::equal(Self, Self) -> Bool
+pub fn GeoRadiusSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GeoRadiusSpec::new(center~ : GeoPoint, radius~ : Double) -> Self
+pub fn GeoRadiusSpec::not_equal(Self, Self) -> Bool
+pub fn GeoRadiusSpec::to_json(Self) -> Json
+
+pub(all) enum MatchValue {
+  Value(Json)
+  Any(Array[Json])
+  Except(Array[Json])
+  Text(String)
+} derive(Eq)
+pub fn MatchValue::equal(Self, Self) -> Bool
+pub fn MatchValue::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MatchValue::not_equal(Self, Self) -> Bool
+pub fn MatchValue::to_json(Self) -> Json
+pub impl ToJson for MatchValue
+pub impl @json.FromJson for MatchValue
+
+pub(all) enum PayloadSchema {
+  Keyword
+  Integer
+  Float
+  Boolean
+  Geo
+  Text
+} derive(Eq)
+pub fn PayloadSchema::equal(Self, Self) -> Bool
+pub fn PayloadSchema::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PayloadSchema::not_equal(Self, Self) -> Bool
+pub fn PayloadSchema::to_json(Self) -> Json
+pub impl ToJson for PayloadSchema
+pub impl @json.FromJson for PayloadSchema
+
+pub(all) struct Point {
+  id : PointId
+  vector : Array[Double]
+  payload : Map[String, Json]?
+} derive(Eq)
+pub fn Point::equal(Self, Self) -> Bool
+pub fn Point::new(id~ : PointId, vector~ : Array[Double], payload? : Map[String, Json]) -> Self
+pub fn Point::not_equal(Self, Self) -> Bool
+
+pub(all) enum PointId {
+  Num(UInt64)
+  Uuid(String)
+} derive(Eq, Hash)
+pub fn PointId::equal(Self, Self) -> Bool
+pub fn PointId::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PointId::hash(Self) -> Int
+pub fn PointId::hash_combine(Self, Hasher) -> Unit
+pub fn PointId::not_equal(Self, Self) -> Bool
+pub fn PointId::of_int(UInt64) -> Self
+pub fn PointId::of_uuid(String) -> Self
+pub fn PointId::to_json(Self) -> Json
+pub impl ToJson for PointId
+pub impl @json.FromJson for PointId
+
+pub(all) struct RangeSpec {
+  gt : Double?
+  gte : Double?
+  lt : Double?
+  lte : Double?
+} derive(Eq, ToJson, @json.FromJson)
+pub fn RangeSpec::equal(Self, Self) -> Bool
+pub fn RangeSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RangeSpec::new(gt? : Double, gte? : Double, lt? : Double, lte? : Double) -> Self
+pub fn RangeSpec::not_equal(Self, Self) -> Bool
+pub fn RangeSpec::to_json(Self) -> Json
+
+pub(all) struct ScoredPoint {
+  id : PointId
+  score : Double
+  payload : Map[String, Json]?
+  vector : Array[Double]?
+} derive(Eq)
+pub fn ScoredPoint::equal(Self, Self) -> Bool
+pub fn ScoredPoint::new(id~ : PointId, score~ : Double, payload? : Map[String, Json], vector? : Array[Double]) -> Self
+pub fn ScoredPoint::not_equal(Self, Self) -> Bool
+
+pub(all) struct ScrollPage {
+  points : Array[StoredPoint]
+  next_offset : PointId?
+} derive(Eq)
+pub fn ScrollPage::equal(Self, Self) -> Bool
+pub fn ScrollPage::not_equal(Self, Self) -> Bool
+
+pub(all) struct ScrollRequest {
+  filter : Filter?
+  limit : Int
+  offset : PointId?
+  with_payload : Bool
+  with_vector : Bool
+} derive(Eq)
+pub fn ScrollRequest::equal(Self, Self) -> Bool
+pub fn ScrollRequest::new(limit~ : Int, filter? : Filter, offset? : PointId, with_payload? : Bool, with_vector? : Bool) -> Self
+pub fn ScrollRequest::not_equal(Self, Self) -> Bool
+
+pub(all) struct SearchRequest {
+  vector : Array[Double]
+  filter : Filter?
+  limit : Int
+  score_threshold : Double?
+  with_payload : Bool
+  with_vector : Bool
+} derive(Eq)
+pub fn SearchRequest::equal(Self, Self) -> Bool
+pub fn SearchRequest::new(vector~ : Array[Double], limit~ : Int, filter? : Filter, score_threshold? : Double, with_payload? : Bool, with_vector? : Bool) -> Self
+pub fn SearchRequest::not_equal(Self, Self) -> Bool
+
+pub(all) struct StoredPoint {
+  id : PointId
+  payload : Map[String, Json]?
+  vector : Array[Double]?
+} derive(Eq)
+pub fn StoredPoint::equal(Self, Self) -> Bool
+pub fn StoredPoint::new(id~ : PointId, payload? : Map[String, Json], vector? : Array[Double]) -> Self
+pub fn StoredPoint::not_equal(Self, Self) -> Bool
+
+pub(all) enum UpsertResult {
+  All
+  Partial(Array[PointId])
+} derive(Eq)
+pub fn UpsertResult::equal(Self, Self) -> Bool
+pub fn UpsertResult::not_equal(Self, Self) -> Bool
+
+pub(all) struct ValuesCountSpec {
+  gt : Int?
+  gte : Int?
+  lt : Int?
+  lte : Int?
+} derive(Eq, ToJson, @json.FromJson)
+pub fn ValuesCountSpec::equal(Self, Self) -> Bool
+pub fn ValuesCountSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ValuesCountSpec::new(gt? : Int, gte? : Int, lt? : Int, lte? : Int) -> Self
+pub fn ValuesCountSpec::not_equal(Self, Self) -> Bool
+pub fn ValuesCountSpec::to_json(Self) -> Json
+
+pub(all) struct VectorConfig {
+  size : Int
+  distance : Distance
+  on_disk : Bool
+} derive(Eq)
+pub fn VectorConfig::equal(Self, Self) -> Bool
+pub fn VectorConfig::new(size~ : Int, distance~ : Distance, on_disk? : Bool) -> Self
+pub fn VectorConfig::not_equal(Self, Self) -> Bool
+
+// Type aliases
+pub type Payload = Map[String, Json]
+
+pub type Vector = Array[Double]
+
+// Traits
+pub(open) trait VectorStore {
+  async fn create_collection(Self, String, VectorConfig) -> Unit raise VectorStoreError
+  async fn delete_collection(Self, String) -> Unit raise VectorStoreError
+  async fn collection_exists(Self, String) -> Bool raise VectorStoreError
+  async fn describe_collection(Self, String) -> VectorConfig raise VectorStoreError
+  async fn upsert(Self, String, Array[Point], Bool) -> UpsertResult raise VectorStoreError
+  async fn delete_points(Self, String, Array[PointId]) -> Unit raise VectorStoreError
+  async fn delete_by_filter(Self, String, Filter) -> Unit raise VectorStoreError
+  async fn retrieve(Self, String, Array[PointId], Bool, Bool) -> Array[StoredPoint] raise VectorStoreError
+  async fn search(Self, String, SearchRequest) -> Array[ScoredPoint] raise VectorStoreError
+  async fn scroll(Self, String, ScrollRequest) -> ScrollPage raise VectorStoreError
+  async fn create_payload_index(Self, String, String, PayloadSchema) -> Unit raise VectorStoreError
+}
