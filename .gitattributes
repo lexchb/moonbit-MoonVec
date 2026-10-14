@@ -1,0 +1,18 @@
+# 换行符统一策略。
+#
+# 背景：本机 core.autocrlf=true，检出时会把文本文件变成 CRLF；而 moon fmt 产出的是 LF。
+# 结果是「什么都没改但 git diff 一直是脏的」，并会让 CI 的 moon fmt --check 随机失败。
+# 这里显式声明属性，使文本文件统一按 LF 入库、也按 LF 检出（不再依赖各人的 core.autocrlf）。
+* text=auto eol=lf
+
+# 将来若加入 Windows 批处理脚本，必须保持 CRLF，否则部分 shell 会解析失败
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制资源不做行尾转换，避免仓库被损坏
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
