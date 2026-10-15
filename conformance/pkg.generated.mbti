@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lexchb/moon_vector/conformance"
+
+import {
+  "lexchb/moon_vector/src/core",
+}
+
+// Values
+pub async fn run_conformance(&@core.VectorStore, String) -> Array[String] raise @core.VectorStoreError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
