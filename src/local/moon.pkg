@@ -3,3 +3,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/math",
 }
+
+import {
+  "lexchb/moon_vector/conformance",
+} for "test"
