@@ -6,14 +6,18 @@
 
 | 元信息 | 值 |
 | --- | --- |
-| 文档版本 | v1.3 |
-| 文档日期 | 2026-10-14 |
+| 文档版本 | v1.4 |
+| 文档日期 | 2026-10-15 |
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
 | 许可证 | Apache-2.0 |
 | 已验证工具链 | `moon 0.1.20260920` / `moonc 0.10.14` + `moonbitlang/async 0.22.1`（详见 13.2） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
-| 当前进度 | M0、M1 已完成（M1 见 13.4；`src/core` 全绿 24/24，`.mbti` 已生成） |
+| 当前进度 | M0、M1、M2 已完成（M2 见 13.5；`src/core` + `src/local` + `conformance` 三目标全绿） |
+
+> 包路径勘误（v1.4）：MoonBit 的包名是「模块名 + 目录路径」，因此 `src/core` 的真实包名是
+> **`lexchb/moon_vector/src/core`**（而不是 v1.3 里写的 `lexchb/moon_vector/core`）。
+> 依据是 `moon info` 生成的 `src/core/pkg.generated.mbti` 第 2 行。跨包 `import` 必须用完整包名。
 
 ---
 
@@ -32,6 +36,7 @@
 | v1.1 | 2026-10-14 | M0 技术验证完成，按实测回填第 2.3 / 6 / 7 / 8 / 11 / 13 / 14 / 15 / 16 节；新增 13.2 验证记录 | — |
 | v1.2 | 2026-10-14 | 定稿 Q2（模块名改为 `lexchb/moon_vector`）与 Q10（`@async.Mutex` 可用）；发现 `wasm-gc` 下 `async test` 不执行，可运行目标修正为 `wasm`；新增 13.3 | — |
 | v1.3 | 2026-10-14 | M1 完成：`src/core` 落地并三目标全绿；定稿 Q3/Q4/Q5/Q7/Q11；修正 API 声明（`pub(open) trait` / `pub(all) enum`）与 `PointId` 位宽；新增约束 5 与 13.4 | — |
+| v1.4 | 2026-10-15 | M2 完成：`src/local` 与 `conformance` 落地并三目标全绿；定稿 Q6（Cosine 零向量 → 固定分 1.0）与 Q8（强类型 payload 顺延出 M2）；**勘误两处**：`retrieve` 返回 `Array[StoredPoint]`（v1.3 误写 `ScoredPoint`）、包名为 `lexchb/moon_vector/src/core`；新增 9.5 错误语义表、9.6 过滤求值细则与 13.5 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -132,10 +137,11 @@
 ### 4.2 依赖方向（硬约束）
 
 - `core` **不得**依赖 `@http`、`@async` 的 IO 部分、`local`、`remote`。
-- `local` 只依赖 `core`（+ `@json`）。
+- `local` 只依赖 `core` + `@async`（**M2 实测修正**：`MemoryStore` 内部持有 `@async.Mutex`，故 `async` 是 local 的**正式运行时依赖**，与 core 的 `for "test"` 不同）。local 不使用 `@json` 的函数式 API（`Json` 类型与其智能构造器来自内建，无需 import）。
 - `remote` 依赖 `core` + `@async` + `@async/http`，且 `supported_targets = "native"`。
 - `core` 与 `local` 不做 target 限制，须在 `js` / `wasm` / `native` 全部通过测试（`wasm-gc` 只要求 `moon check` 通过）。
 - 禁止反向依赖，禁止 `core` 里出现任何 Qdrant 专有字段名。
+- 包名一律按「模块名 + 目录路径」书写，即 `lexchb/moon_vector/src/core`、`lexchb/moon_vector/src/local`、`lexchb/moon_vector/conformance`（见元信息勘误）。
 
 > 这条约束是「抽象层不暴露 Qdrant 特有数据结构」的项目通用性承诺在工程上的落地方式。
 
@@ -151,35 +157,36 @@
 
 ```
 moonbit-Qdrant/
-├── moon.mod.json            # 模块配置
+├── moon.mod                 # 模块配置（lexchb/moon_vector）
 ├── LICENSE                  # Apache-2.0
 ├── README.md
 ├── DEVELOPMENT.md           # 本文档
-├── .gitignore
+├── .gitignore / .gitattributes
 ├── src/
-│   ├── core/                # lexchb/moon_vector/core
-│   │   ├── moon.pkg.json
+│   ├── core/                # lexchb/moon_vector/src/core
+│   │   ├── moon.pkg
 │   │   ├── types.mbt
 │   │   ├── distance.mbt
 │   │   ├── filter.mbt
 │   │   ├── json_codec.mbt
 │   │   ├── error.mbt
 │   │   └── store.mbt
-│   ├── local/               # .../local
-│   │   ├── moon.pkg.json
-│   │   ├── memory.mbt
-│   │   ├── filter_eval.mbt
-│   │   └── path.mbt
-│   └── remote/              # .../remote   (supported_targets = "native")
-│       ├── moon.pkg.json
+│   ├── local/               # lexchb/moon_vector/src/local   (M2)
+│   │   ├── moon.pkg
+│   │   ├── memory.mbt          # MemoryStore + MemCollection + VectorStore 实现
+│   │   ├── distance.mbt        # 四度量 + 零向量约定
+│   │   ├── filter_eval.mbt     # Filter 求值
+│   │   └── path.mbt            # payload 路径解析（点号 + `[]`）
+│   └── remote/              # lexchb/moon_vector/src/remote   (M3, supported_targets = "native")
+│       ├── moon.pkg
 │       ├── dto.mbt
 │       ├── convert.mbt
 │       ├── endpoints.mbt
 │       ├── transport.mbt
 │       └── qdrant.mbt
-├── conformance/             # .../conformance
-│   ├── moon.pkg.json
-│   └── suite.mbt            # run_conformance(storage : &VectorStore)
+├── conformance/             # lexchb/moon_vector/conformance    (M2)
+│   ├── moon.pkg
+│   └── suite.mbt            # run_conformance(store, prefix) -> Array[String]
 ├── examples/
 │   ├── local_search/        # 纯本地，js/wasm 可跑
 │   └── qdrant_rag/          # native，需要 Qdrant 服务
@@ -375,7 +382,7 @@ pub(open) trait VectorStore {
   async fn delete_by_filter(Self, collection : String, filter : Filter) -> Unit raise VectorStoreError
 
   // 数据读取
-  async fn retrieve(Self, collection : String, ids : Array[PointId], with_payload : Bool, with_vector : Bool) -> Array[ScoredPoint] raise VectorStoreError
+  async fn retrieve(Self, collection : String, ids : Array[PointId], with_payload : Bool, with_vector : Bool) -> Array[StoredPoint] raise VectorStoreError
   async fn search(Self, collection : String, req : SearchRequest) -> Array[ScoredPoint] raise VectorStoreError
   async fn scroll(Self, collection : String, req : ScrollRequest) -> ScrollPage raise VectorStoreError
 
@@ -384,6 +391,8 @@ pub(open) trait VectorStore {
 }
 ```
 
+> **v1.4 勘误**：`retrieve` 的返回类型是 `Array[StoredPoint]`（v1.3 误写为 `ScoredPoint`）。按 ID 取点没有相关性，不应凭空造一个 `score` 字段；M1 的实现（`core/types.mbt` 的 `StoredPoint`）与本节现已一致。
+>
 > **Q1 已定稿（实测通过）**：MoonBit **支持** trait 中声明 `async fn`。已在本机工具链上验证四种用法全部可用：
 > ① 作为泛型上界 `fn[T : VectorStore] f(s : T, ..)`；② 以 trait object 动态派发 `s : &VectorStore` 并调用其方法；③ 不同实现可互换；④ **可实现性跨包成立**（须 `pub(open)`，见约束 5）。
 > **不采用**原备选方案（函数字段记录）。
@@ -535,15 +544,17 @@ test "filter json roundtrip" {
 
 `local/filter_eval.mbt` 需把同一套 Filter 应用于 `Map[String, Json]`。语义与 Qdrant 对齐的部分：
 
-- `must`：全部为真才通过；`should`：至少一个为真（若 `must`/`must_not` 均为空，则 `should` 是唯一必要条件）；`must_not`：全部为假才通过。
-- 缺失 key 的条件一律判定为 **不匹配**（与 Qdrant 一致）。
+- `must`：全部为真才通过；`should`：至少一个为真（若 `should` 非空，则**恒定**要求至少一个为真，即使 `must` 非空）；`must_not`：全部为假才通过。
+- 缺失 key 的条件一律判定为 **不匹配**（与 Qdrant 一致）——**唯一例外见 9.6 的 `is_null(value=true)`**。
 
 **路径语义的范围限定（明确划线）**：
 
 - 支持：点号嵌套路径 `a.b.c`。
 - 支持：数组展开后缀 `a.b[].c`（展开后任一元素满足即视为满足）。
-- 不支持：`[0]` 之类的显式下标、通配符。遇到不支持形式返回 `VectorStoreError::Unsupported`，**不得静默返回不匹配**。
+- 不支持：`[0]` 之类的显式下标、通配符、空段（`a..b`、前后点号）。遇到不支持形式返回 `VectorStoreError::Unsupported`，**不得静默返回不匹配**。
 - 该差异必须在共享 README 的「已知差异」小节中公开，避免用户误判。
+
+> 逐个 Condition 的完整求值规则（含数组元素语义、geo 是否实现、`is_empty` / `is_null` 的缺失 key 例外）在 **9.6** 定稿；本节只声明路径语义的边界。
 
 ---
 
@@ -697,46 +708,128 @@ pub(all) suberror VectorStoreError {
 ### 9.1 数据结构
 
 ```moonbit
-struct MemCollection {
+// local 包内部（priv，不对外暴露）
+priv struct MemCollection {
   config : VectorConfig
-  points : Array[Point]          // 或 Map[PointId, Point] 以加速 retrieve
+  points : Array[Point]           // 插入序；scroll 的游标语义依赖它
+  index : Map[PointId, Int]       // ID → points 下标，O(1) retrieve / upsert
+}
+
+pub(all) struct MemoryStore {
+  priv lock : @async.Mutex
+  priv collections : Map[String, MemCollection]
 }
 ```
 
-- 用 `Map[PointId, Int]`（ID → 下标）做 O(1) `retrieve` / upsert 覆盖。
-- `PointId` 需实现 `Eq` / `Hash` 才能做 Map 键。
+- `Map[PointId, Int]`（ID → 下标）做 O(1) `retrieve` / upsert 覆盖；`PointId` 已 `derive(Eq, Hash)`。
+- **插入序由 `points` 数组本身承载**，不额外维护 order 数组：upsert 覆盖同 ID 时**原位替换**（交替赋值），不改动插入位置，因此 `scroll` 游标在「覆盖写」下依然稳定。
+- 删除点会打乱下标，故删除后**重建 index**（O(n)）；本地后端本就是 O(n) 暴力检索，可接受。
+- 字段是 `priv`：外部只能通过 `MemoryStore::new()` 构造，无法触碰锁与内部集合（跨包时 `priv` 成员不可见，见 16.1）。
 
 ### 9.2 距离实现
 
-| 度量 | 公式要点 | 分数语义 |
-| --- | --- | --- |
-| Cosine | `1 - cos(a,b)` | 越小越近；需处理零向量（约定：零向量相似度返回 1.0 或报 `InvalidArgument`，**需定稿**，见 Q6） |
-| Euclid | 欧氏距离 | 越小越近 |
-| Dot | `-dot(a,b)`（Qdrant 内部转成距离，越大内积 = 越小分数） | 越小越近 |
-| Manhattan | L1 距离 | 越小越近 |
+| 度量 | 公式 | 本库 `score`（越小越近） | Qdrant 返回的 `score` | 二者关系 |
+| --- | --- | --- | --- | --- |
+| Cosine | `1 - cos(a,b)` | `1 - cos` | `cos`（越大越好） | 本库 = `1 - qdrant` |
+| Euclid | 欧氏距离 | `sqrt(Σ(a-b)²)` | 距离（越小越好） | **相同** |
+| Dot | 负内积 | `-Σ(a·b)` | `Σ(a·b)`（越大越好） | 本库 = `-qdrant` |
+| Manhattan | L1 距离 | `Σabs(a-b)` | 距离（越小越好） | **相同** |
 
-**对齐要求**：`score` 的数值必须与 Qdrant 同度量下的 `score` 一致（含 `Dot` 的取负约定），否则一致性测试无法比对。M2 需用真实 Qdrant 对同批数据做数值比对，允许浮点容差（如 `1e-6` 相对误差）。
+- **本库统一「越小越近」**（Q7 定稿）：Cosine / Dot 属「相似度型」度量，必须做一次单调变换（Cosine 取 `1 - cos`，Dot 取负）；Euclid / Manhattan 本身就是距离，直接使用。
+- **零向量约定（Q6 定稿，M2）**：Cosine 度量下，只要**任一侧**（查询向量或已存点）模长为 0，`cos` 记作 `0`，本库 `score` 固定为 **1.0**。理由：① 不产生 `NaN`（否则排序与阈值比较全部失效）；② 不抛异常，与 Qdrant「不报错」的行为更接近；③ 语义可解释为「正交 / 无相似度」。
+  - 该分支是**本地后端的确定性约定**，C15 的黄金数据**刻意排除零向量**。M3 必须用真实 Qdrant 复测零向量，若不一致则在本节与 README「已知差异」中显式声明。
+- **对齐要求**：`score` 数值须与上表换算后的 Qdrant 值一致，允许浮点相对误差 `1e-6`。参考值来源见 10 节。
 
 ### 9.3 检索流程
 
-`search`：
-1. 校验维度与 `config.size` 一致，否则 `InvalidArgument`。
-2. 对全部点算距离 → 按 score 升序排序 → 截断 `limit`。
-3. 应用 `score_threshold`（语义与 Qdrant 一致：低于阈值的丢弃，需对齐「大于/小于」方向）。
-4. 应用 filter（若 `must` 等存在，先过滤再排序可减少计算量；实现上先过滤）。
-5. 按 `with_payload` / `with_vector` 决定是否填充字段。
+`search` 的校验顺序**固定**（用哪种错误见 9.5）：
 
-`scroll`：按插入顺序（或 ID 顺序，**需定稿**，见 Q7）分页，`offset` 为上一页的 `next_offset`。
+1. 集合不存在 → `NotFound`；
+2. `limit < 1` → `InvalidArgument`；
+3. `req.vector.length() != config.size` → `InvalidArgument`；
+4. **先过滤再算距离**（filter 存在时）；filter 的路径形式非法 → `Unsupported`；
+5. 对候选点算距离，按 `score` 升序排序；**分数相同时按 `PointId` 升序**（本地保证确定性；远端不承诺该次序，故一致性测试不得依赖它）；
+6. 截断 `limit`；
+7. 应用 `score_threshold`：**保留 `score <= threshold` 的点**（Q7 定稿）；
+8. 按 `with_payload` / `with_vector` 填充字段。
+
+字段填充规则（两个后端必须一致）：
+
+- `with_payload = true` → `Some(payload)`；写入时没有 payload 的点返回 **`Some(空 Map)`**（与 Qdrant 的 `{}` 一致），不是 `None`。
+- `with_payload = false` → `None`；`with_vector = true` → `Some(vector)`；`false` → `None`。
+
+`scroll`：
+
+- 校验顺序：集合不存在 → `NotFound`；`limit < 1` → `InvalidArgument`；`offset` 有值但**不在集合中** → `InvalidArgument`。
+- **按插入序**（Q5 定稿：不承诺全局顺序，只承诺不重不漏）。`offset` 语义是「上一页返回的最后一个 `PointId`」；定位时**只在插入序里找该 ID 的位置**（即使它被 filter 排除也照此定位），再从它的下一个位置开始扫描，保证游标不漂移。
+- `next_offset`：若其后仍存在**满足 filter 的点**，返回本页最后一个返回点的 ID；否则返回 `None`。
+- 删除点会让其后所有点的下标前移，但**相对次序不变**，故「不重不漏」仍成立。
+
+`retrieve`：按传入 `ids` 顺序返回**能取到**的点（不存在的 ID 静默跳过，与 Qdrant 一致）；集合不存在 → `NotFound`。
 
 ### 9.4 并发与线程安全
 
-`MemoryStore` 内含可变状态。**Q10 已定稿（实测，见 13.3）：`@async.Mutex` 与 `@async.Semaphore` 均可用，且在 `native` / `js` / `wasm` 三个可运行目标上通过验收**（8 任务 × 50 次临界区累加结果为精确 400，无丢更新；Semaphore(2) 下的并发峰值不超过 2）。因此决定：
+`MemoryStore` 内含可变状态。**Q10 已定稿（实测，见 13.3）：`@async.Mutex` 与 `@async.Semaphore` 均可用**（8 任务 × 50 次临界区累加为精确 400，无丢更新；Semaphore(2) 下并发峰值 ≤ 2）。M2 又补测了本后端真正依赖的两条语义（`src/local/lock_wbtest.mbt`，三目标通过）：
 
-- **内部串行化**：`MemoryStore` 持有 `@async.Mutex`，在 `upsert` / `delete_*` / `create_collection` 等写路径上 `acquire` + `release`（`acquire` 为 `noraise`，无需 `catch`；建议用 `defer` 保证释放）。这样 `MemoryStore` 可直接用于 `@async.all(..., max_concurrent=n)` 的并发批量写，无需调用方额外处理。
+- **`defer` 在临界区 `raise` 展开时仍会释放锁** —— 这是「写路径统一写 `acquire` + `defer release`」敢于成立的前提。若该前提不成立，一次失败的写操作会永久占住锁，症状是后续操作挂死而非报错（见 13.5）。
+- **并发累加无丢更新**：Mutex 在 native / js / wasm 上都真的互斥。
+
+因此决定：
+
+- **内部串行化**：`MemoryStore` 持有 `@async.Mutex`，**11 个方法全部**走 `acquire` + `defer release` 的统一形态（读路径也加锁，省掉「读是否会观察到半更新状态」的推理成本）。这样 `MemoryStore` 可直接用于 `@async.all(..., max_concurrent=n)` 的并发批量写，无需调用方额外处理。
+- **临界区内不含 `suspend` 点**：临界区只做同步运算（过滤、距离、排序、map 操作），不调用任何 async 函数，因此在协作式调度下临界区是**原子的**；`acquire` 本身可能挂起，但那只发生在进临界区之前。这条是 review 时的硬要求。
 - `VectorStore` 的所有方法本来就是 `async`，因此加锁不会污染同步 API。
 - **批量并发上限**由 `@async.all(max_concurrent=n)` 控制，`Semaphore` 仅在需要跨多次调用维持长期配额时使用。
-- **README 说明**：内部串行化意味着本地后端的写操作是串行的、不提供锁外的并行度保证；这符合「本地后端用于测试与离线」的定位。
+- **README 说明**：内部串行化意味着本地后端的操作是串行的、不提供锁外的并行度保证；这符合「本地后端用于测试与离线」的定位。
 - `wasm-gc` 目标下无法验证并发行为（`async test` 不执行），故对 `wasm-gc` 只承诺「可编译」，不承诺并发正确性。
+
+### 9.5 本地后端的错误语义（C14 的依据）
+
+**契约：两个后端都必须能用同一套 `VectorStoreError` 表达失败**（8.4）。本地后端的具体映射：
+
+| 触发条件 | 抛出的错误 | 涉及方法 |
+| --- | --- | --- |
+| 目标集合不存在 | `NotFound(resource="collection:<name>")` | `delete_collection` / `describe_collection` / `upsert` / `delete_points` / `delete_by_filter` / `retrieve` / `search` / `scroll` / `create_payload_index` |
+| 同名集合已存在且配置不同 | `Conflict(message=..)` | `create_collection` |
+| `config.size < 1` | `InvalidArgument(message=..)` | `create_collection` |
+| 向量维度 ≠ `config.size` | `InvalidArgument(message=..)` | `upsert` / `search` |
+| `limit < 1` | `InvalidArgument(message=..)` | `search` / `scroll` |
+| `scroll` 的 `offset` 不在集合中 | `InvalidArgument(message=..)` | `scroll` |
+| filter 路径形式不被支持 | `Unsupported(feature=..)` | `search` / `scroll` / `delete_by_filter` |
+| 同名集合配置一致 | 成功（幂等，Q4 定稿） | `create_collection` |
+| 集合不存在时的查询 | `false`，**不抛错** | `collection_exists` |
+
+**明确不抛**的两类：
+
+- 本地后端**永不**抛 `Http` / `Server` / `Decode` / `Auth` / `RateLimited` / `Timeout` / `Transport` —— 这些只在远端出现（8.3）。一致性测试的 C14 只断言双方「共有」的错误种类，不对本地后端的私有分支做断言。
+- `upsert` 的 `wait` 参数在本地**被忽略**（无远端刷新语义），恒返回 `UpsertResult::All`；`create_payload_index` 在本地是 **no-op 成功**（暴力检索不需要索引，但集合不存在仍报 `NotFound`）。
+
+### 9.6 过滤求值细则（本地）
+
+`eval_filter(f, payload, point_id)` 的规则。**总原则：取值类条件在 key 缺失时一律不匹配**（7.4），唯一例外是 `is_null(value=true)`。
+
+| 条件 | 本地求值规则 |
+| --- | --- |
+| `must` / `should` / `must_not` | `must` 全真；`should` 非空时**恒定**要求至少一个为真；`must_not` 全假 |
+| `Clause::Cond` / `Clause::Group` | `Cond` 求值单条件；`Group` 递归求值嵌套 Filter（可无限层嵌套） |
+| `Match::Value(j)` | 路径取值后：值本身或**数组的任一元素**与 `j` 相等（数字按数值比较，忽略 JSON 字面量写法差异） |
+| `Match::Any(js)` / `Match::Except(js)` | 同上，任一元素落在集合内 / **没有任何**元素落在集合内 |
+| `Match::Text(t)` | 值的字符串**包含** `t`（不区分大小写）。Qdrant 的 `text` 基于分词全文索引，这里是**近似实现**：一致性测试只使用「分词与子串结果一致」的样本，差异记入 README「已知差异」 |
+| `Range` | 值或数组任一元素是数字且满足全部给定边界（`gt` / `gte` / `lt` / `lte`） |
+| `GeoBoundingBox` | 值为 `{lat, lon}` 对象，且 `bottom_right.lat ≤ lat ≤ top_left.lat`、`top_left.lon ≤ lon ≤ bottom_right.lon`；数组任一元素满足即可 |
+| `GeoRadius` | haversine 距离 ≤ `radius`（**radius 单位为米**，与 Qdrant 一致，见 README）；数组任一元素满足即可 |
+| `ValuesCount` | 值必须是数组（取 `length`）或对象（取键数）；标量 → 不匹配；再按边界比较 |
+| `IsEmpty(value=true)` | key **存在**且值为空数组或空对象 → 命中；**key 缺失 → 不命中**。`value=false` 时取相反的判定 |
+| `IsNull(value=true)` | **key 缺失 或 值为 `null` → 命中**（这是「缺失 key 不匹配」的唯一例外，Qdrant 的 `is_null` 就用于匹配缺字段/空字段） |
+| `HasId(ids)` | `point_id ∈ ids`（不看 payload，因此路径语义与它无关） |
+| `Nested(key, filter)` | key 的值必须是数组，其**任一对象元素**满足内层 filter（内层 filter 以该元素为 payload 求值） |
+
+路径语义（7.4 已划线，这里是实现口径）：
+
+- 解析支持 `a.b.c` 与 `a.b[].c`；`[]` 的语义是「取该段的值后**展开一层数组**」，供后续段继续下钻。末段的 `[]` 与条件自带的「数组任一元素」语义等价，不冲突。
+- 数组展开只展开**一层**；`a[][]` 这类相邻双展开不支持 → `Unsupported`。
+- 空段（`a..b`、`.a`、`a.`）、显式下标（`a[0]`）、通配符（`a[*]`）→ `Unsupported(feature=<原始路径>)`。**绝不允许静默返回「不匹配」**。
+- 类型不符（如路径中间遇到数字）**不是**错误，只是该分支无候选值 → 条件不成立。
 
 ---
 
@@ -746,30 +839,38 @@ struct MemCollection {
 
 ```moonbit
 // conformance/suite.mbt
-pub async fn run_conformance(store : &VectorStore, name_prefix : String) -> Unit raise VectorStoreError
+pub async fn run_conformance(store : &VectorStore, name_prefix : String) -> Array[String] raise VectorStoreError
 ```
+
+**v1.4 定稿：返回「失败消息列表」而不是 `Unit`**，理由有三：
+
+1. `@test.fail` 的错误类型是抽象 `Error`，与 `raise VectorStoreError` 不兼容（在 `raise VectorStoreError` 的函数里调它编译不过，M0 已踩过同类坑），因此共享套件**不能依赖测试框架**；
+2. 一次跑完所有场景，能一次性看到**全部**失败项，而不是被第一个失败打断；
+3. `conformance` 保持为普通库包，remote 与 local 的测试文件都只写三行：跑套件 → 有失败就 `fail` → 断言失败数为 0。
+
+**调用契约**：`name_prefix` 用于隔离集合名（**不同调用必须传不同前缀**，因为 `async test` 并行执行、测试之间不得共享状态，见 12.1 纪律 1）；套件在开始与结束时自行清理自己创建的集合，不依赖外部。
 
 覆盖场景（每个后端都必须跑）：
 
-| # | 场景 | 断言 |
+| # | 场景 | 断言（本地/远端都必须成立） |
 | --- | --- | --- |
-| C1 | 建集合 → 存在性 → 描述 | `exists == true`，描述的 `size`/`distance` 一致 |
-| C2 | 重复建同名集合 | 行为一致（幂等或报错，**需定稿**，见 Q4） |
-| C3 | upsert 覆盖同 ID | 结果只有最新值，`retrieve` 一致 |
-| C4 | 批量 upsert | `UpsertResult` 与最终条数一致 |
-| C5 | 检索 top-k 排序 | 分数单调、顺序一致、`limit` 生效 |
-| C6 | `score_threshold` | 越界点被剔除 |
-| C7 | filter：`must` / `should` / `must_not` | 命中集合与预期一致 |
-| C8 | filter：嵌套 Filter（`Clause::Group`） | 同上 |
-| C9 | filter：`match` 的 `value` / `any` / `except` / `text` | 同上 |
-| C10 | filter：`range` 四种边界 | 同上 |
-| C11 | filter：缺失 key | 判定为不匹配 |
-| C12 | `scroll` 分页游标 | 遍历全量不重不漏 |
-| C13 | `delete_points` / `delete_by_filter` | 删除后 `retrieve` 为空 |
-| C14 | 维度不符 / 集合不存在 | 抛出对应 `VectorStoreError`，错误种类一致 |
-| C15 | 距离数值 | 与 Qdrant 参考值在容差内一致（仅远端可比对时执行） |
+| C1 | 建集合 → 存在性 → 描述 | `exists == true`；描述的 `size` / `distance` 与创建时一致 |
+| C2 | 重复建同名集合（配置一致 / 不一致） | 一致 → 成功（Q4 幂等）；不一致 → `Conflict` |
+| C3 | upsert 覆盖同 ID | 只保留最新值；`retrieve` 得到的 payload / vector 是新值；条数不增 |
+| C4 | 批量 upsert | 返回 `All`；最终条数 = 写入的去重后条数 |
+| C5 | 检索 top-k | 只比较 **score 单调不减** + 命中集合（**不断言并列次序**，见 9.3）；`limit` 精确生效（条数 = min(limit, 命中数)） |
+| C6 | `score_threshold` | 结果中每个点都满足 `score <= threshold`；且与不加阈值时的前段一致 |
+| C7 | filter：`must` / `should` / `must_not` | 命中 ID 集合与预期完全相等（三种子句各一组用例；`should` 采用 9.6 的「非空即恒定要求 ≥1」语义） |
+| C8 | filter：嵌套 Filter（`Clause::Group`） | 同上；另含一层 `must` 内嵌 `must_not` 的组合 |
+| C9 | filter：`match` 的 `value` / `any` / `except` / `text` | 同上；样本只用「分词与子串结果一致」的文本，避开 9.6 的近似差异 |
+| C10 | filter：`range` 的 `gt` / `gte` / `lt` / `lte` 及组合 | 同上；边界值恰好等于阈值时按 `>=` / `>` 区分 |
+| C11 | filter：缺失 key | 取值类条件判「不匹配」；**`is_null(value=true)` 反向命中**（9.6 的唯一例外） |
+| C12 | `scroll` 分页游标 | 用小 `limit` 反复翻页直到 `next_offset == None`；合并结果与原集合**相等且无重复**（Q5：不承诺顺序） |
+| C13 | `delete_points` / `delete_by_filter` | 删除后 `retrieve` 为空 / 命中的点消失，未命中的点仍在 |
+| C14 | 错误种类 | 维度不符 → `InvalidArgument`；集合不存在 → `NotFound`；重复建且配置冲突 → `Conflict`；不支持路径 → `Unsupported`（**仅断言语义级错误种类**，不断言本地私有的 `Http` 等分支） |
+| C15 | 距离数值 | 与黄金值在容差内一致（见下） |
 
-C15 的参考值来源：`tests/integration/` 中预先用真实 Qdrant 生成并固化的 golden 数据（JSON fixture），避免测试依赖在线服务。
+**C15 的黄金值来源（v1.4 修正）**：M2 阶段**没有 Docker**（13.2），无法用真实 Qdrant 生成 fixture，因此 M2 使用**解析式手算黄金值**（例如 `a=[1,0]`、`b=[0,1]` 在四种度量下的 score 分别为 `1.0` / `√2` / `0.0` / `2.0`），并**显式声明这不是端到端比对**。M3 必须用真实 Qdrant 对同一批数据重新固化 golden fixture（`tests/integration/` 的 JSON 文件）并替换/补充这组手算值；届时若发现 9.2 的换算表与 Qdrant 实际不符，需回改 9.2 与 README。
 
 ---
 
@@ -826,11 +927,32 @@ import {
 ```
 
 - `core` 的**生产 API 不依赖 async 运行时**（M1 实测：trait 里声明 `async fn` 并不需要 import async；原 `import` 里的 async 被判为 `unused_package`）。运行时只在测试期需要，故用 `for "test"` 声明 —— 这样 `core` 可以保持零运行时依赖，跨目标更干净。
-- `src/remote/moon.pkg` 将来需要：
+- `src/local/moon.pkg` 实际内容（M2）：**`async` 是正式依赖**（`MemoryStore` 持有 `@async.Mutex`），`core` 也是正式依赖；`conformance` 只在测试期用得上，故 `for "test"`：
 
 ```moon
 import {
-  "lexchb/moon_vector/core",
+  "lexchb/moon_vector/src/core",
+  "moonbitlang/async",
+}
+
+import {
+  "lexchb/moon_vector/conformance",
+} for "test"
+```
+
+- `conformance/moon.pkg` 实际内容（M2）：只依赖 core（**不依赖测试框架**，见 10 节）：
+
+```moon
+import {
+  "lexchb/moon_vector/src/core",
+}
+```
+
+- `src/remote/moon.pkg` 将来需要（**注意包名要带 `src/` 前缀**，见元信息勘误）：
+
+```moon
+import {
+  "lexchb/moon_vector/src/core",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",
@@ -919,7 +1041,7 @@ jobs:
 | --- | --- | --- |
 | **M0 技术验证** | 工具链能力探明 | ✅ **已完成**（见 13.2）：① trait 中 `async fn` 可行性 → 支持；② `PointId` / `MatchValue` 手写编解码 → 可行；③ native 下 `@http` 端到端 → 可行（用本地桩替代真实 Qdrant）；④ 本文档第 2.3 / 6 / 7 / 8 / 11 / 12 节已按实测回填 |
 | **M1 core 抽象层** | 类型、Filter DSL、错误、trait | ✅ **已完成**（见 13.4）：类型全部就位；Filter 编解码往返测试通过；`moon test` 在 native/js/wasm 均 24/24；`.mbti` 已生成；`extend` 声明齐备（0 warning） |
-| **M2 local 后端** | 暴力 kNN + 过滤求值 + 分页 + `@async.Mutex` 串行化 | 一致性测试 C1–C14 全绿；距离数值与 Qdrant 对齐（C15，容差内）；native/js/wasm 通过 |
+| **M2 local 后端** | 暴力 kNN + 过滤求值 + 分页 + `@async.Mutex` 串行化 | ✅ **已完成**（见 13.5）：C1–C15 全绿（套件对 local 跑通）；距离数值与手算黄金值在容差内一致；native/js/wasm 各 **43/43**；0 warning |
 | **M3 remote 后端** | 端点映射、传输层、错误映射 | 对真实 Qdrant 跑通 G2 全流程（无 Docker 环境先用本地桩 + golden fixture 过渡）；重试/超时/状态码映射有针对性测试；一致性测试全绿 |
 | **M4 批量与并发** | `@async.all` 有界并发批量写入/检索 | 并发度可配；失败传播/取消行为有测试；`MemoryStore` 的 `@async.Mutex` 串行化有并发正确性测试 |
 | **M5 发布** | README、示例、CI、mooncakes | 示例可一键跑通（local 示例不依赖 Docker）；CI 三个作业全绿；发布 v0.1.0；仓库 ≥10 个有效 commit |
@@ -1063,6 +1185,61 @@ src/core/pkg.generated.mbti     # 接口冻结产物（moon info）
 
 ---
 
+### 13.5 M2 实测记录（2026-10-15，已完成）
+
+**产出**（全部入库）：
+
+```
+src/local/moon.pkg                # core + async + @math；conformance 仅 for "test"
+src/local/path.mbt                # 路径解析与取值（点号 + `[]` 一层展开，其余 Unsupported）
+src/local/distance.mbt            # 四度量 + Q6 零向量约定
+src/local/filter_eval.mbt         # 逐条件求值（含 haversine 与「缺 key / 空值」分界）
+src/local/memory.mbt              # MemoryStore + MemCollection + 11 个方法 + pub extend
+src/local/lock_wbtest.mbt         # Mutex：defer-on-raise + 并发累加（2 个测试）
+src/local/distance_wbtest.mbt     # 四度量数值（4 个测试）
+src/local/filter_eval_wbtest.mbt  # 路径与求值语义（10 个测试）
+src/local/memory_test.mbt         # 黑盒守门 + 一致性套件入口（3 个测试）
+src/local/pkg.generated.mbti      # 接口冻结：只有 MemoryStore::new + 11 个方法 + impl 声明
+conformance/moon.pkg
+conformance/suite.mbt             # C1–C15（返回失败列表，不依赖测试框架）
+conformance/pkg.generated.mbti    # 只暴露 run_conformance
+```
+
+**验收结果**：
+
+| 项 | 结果 |
+| --- | --- |
+| `moon check` | 0 error，**0 warning** |
+| `moon test --target native` | **43/43** |
+| `moon test --target js` | **43/43** |
+| `moon test --target wasm` | **43/43** |
+| 一致性套件 | C1–C15 全绿（对 local 后端跑通；套件把失败收集成列表，一次看全） |
+| `moon fmt` | 通过（仅补齐 `moon.mod` / `src/core/moon.pkg` 的文件尾换行） |
+| `moon info` | 通过，新增 `src/local` 与 `conformance` 的 `.mbti` |
+
+**测试计数（12.1 纪律 3）**：43 = core 24 + local 19（lock 2 + distance 4 + 路径/求值 10 + 守门 3）。三个目标的计数**完全一致**，说明没有出现「静默跳过」的假绿。
+
+**M2 期间发现并已修正的问题（按严重程度）**：
+
+| # | 问题 | 影响 | 落在哪一节 |
+| --- | --- | --- | --- |
+| 1 | **跨包使用的 trait impl 必须写 `pub impl`** | 裸 `impl` 只在**声明它的包内**可见：`local` 对 `VectorStore` 的实现对别的包「不存在」，黑盒测试直接报 `does not implement trait ...: no impl is defined`。M1 的测试替身恰好与被测 trait 同包，所以这个坑到 M2 才暴露 | 16.1 |
+| 2 | **`impl ... with` 内不能给方法写 `async`** | `impl T for X with async fn m(..)` 直接**解析失败**；异步性完全由 trait 声明决定，实现处写 `fn m(..)` 即可 | 16.1 |
+| 3 | **泛型参数必须写在函数名之前** | `fn[X : Eq + Show] T::m(..)` 合法；`fn T::m[X : Eq + Show](..)` 解析失败 | 16.1 |
+| 4 | **`Map` 的大括号字面量在实参位置有语法歧义** | `payload={ "k": v }` 里的 `{` 被当作块，报错位置指向后面无关的 `)`，极难定位；统一改用 `Map([...])` | 16.1 |
+| 5 | **解析错误会级联出一大批误导性类型错误** | 一个 `async fn` 解析失败，连带报出 `There is no record definition with the fields: points, next_offset`——而那个字面量本身完全正确。教训：**先修解析错误，再看剩余报错** | 16.1 |
+| 6 | 测试 helper 里调用 `fail` 需声明错误类型 | 否则报 `Function with error can only be used inside a function with error types in its signature`；helper 写成 `-> Unit raise` 即可 | 16.1 |
+| 7 | `@math.pi` / `Map::new()` 已弃用 | `moon check` 会报 deprecated 告警；改用 `@math.PI` 与 `Map([], capacity=..)`（本地用 `Map([])`） | 16.1 |
+| 8 | core 的公共类型没有 `Show` | 一致性套件无法直接 `inspect` / 插值结构体（`\{x}` 编译不过），故套件改为**比较渲染后的字符串或布尔表达式**。这是 M1「枚举只 derive `Eq`」带来的实际成本；若后续要提升可读性，可考虑给 `PointId` / `Distance` 等补 `Show`（**当前不做**，避免 M2 越界） | 10 节 / 16.1 |
+
+**M2 新增的、M3 必须复核的三件事**（都写在对应小节，不要漏）：
+
+1. 9.2 的「本库 `score` ↔ Qdrant `score`」换算表（Cosine / Dot 反号）**未经真实 Qdrant 验证**；
+2. `should` 的语义（非空即恒定要求 ≥1），C7 已把它钉住，M3 若实测与 Qdrant 不符需回改 9.6 与 C7 期望；
+3. `text` 匹配在本地是子串近似（Qdrant 是分词全文）；C9 只用了两者结论一致的样本，README 需声明差异。
+
+---
+
 ## 14. 关键设计决策记录（ADR）
 
 | # | 决策 | 理由 | 代价 |
@@ -1081,6 +1258,10 @@ src/core/pkg.generated.mbti     # 接口冻结产物（moon info）
 | ADR-12 | 集成测试以本地 HTTP 桩兜底 | 本机无 Docker，无法用真实 Qdrant 起步；桩可精确复刻响应形状 | 桩与真实 Qdrant 可能有细节差异，CI 仍需跑真实容器 |
 | ADR-13 | 模块名用 `lexchb/moon_vector`，不用 `moonbit-community/*` | Q2 取证：官方发布路径只支持 `<自己的账号>/<模块名>`，无自助加入组织入口 | 与申报书原文不一致，需回写申报书；将来能否迁入组织不确定 |
 | ADR-14 | **`PointId::Num(UInt64)` 而非 `Int64`** | Qdrant 的 ID 是 u64，自动生成的随机 ID 约半数超出 2^63-1；用 Int64 会导致这些已存在的点读不回来（M1 实测修正，见 13.4） | 与本文档 v1.2 不一致；`UInt64` 字面量要写 `UL`，且需自行实现精确十进制解析 |
+| ADR-15 | **Cosine 零向量 → `score` 固定 1.0**（`cos` 记 0） | Q6 定稿。`NaN` 会让排序与 `score_threshold` 比较全部失效；抛错又与 Qdrant 行为不符。记 0 的语义可解释为「正交」 | 与 Qdrant 的零向量行为未经实测比对（无 Docker），M3 必须复核；C15 黄金值排除零向量 |
+| ADR-16 | **跨包 `import` 用完整包名（含 `src/`）**，如 `lexchb/moon_vector/src/core` | 包名 = 模块名 + 目录路径（由 `pkg.generated.mbti` 第 2 行确证）。v1.3 文档写的 `lexchb/moon_vector/core` 是错的，照抄会让 `local` / `remote` 的 import 全部编译失败 | 文档内所有包路径注释都要跟着改（v1.4 已改） |
+| ADR-17 | **conformance 套件不依赖测试框架，返回失败消息列表** | `@test.fail` 的错误类型是抽象 `Error`，与 `raise VectorStoreError` 不能共存；返回列表还能一次跑完全部场景、让 remote/local 的测试文件各自只写三行 | 调用方需要自己 `fail`；失败信息是字符串而非断言栈，定位精度略低 |
+| ADR-18 | **`MemoryStore` 的 11 个方法全部加锁，且临界区内不含 `suspend` 点** | 统一形态省掉「读是否会看到半更新状态」的推理；`defer` 在 raise 展开时确实释放锁已由 `lock_wbtest.mbt` 实测（否则失败调用会永久占锁，症状是挂死） | 读操作也被串行化，本地后端并发度受限（符合「测试与离线」定位） |
 
 ---
 
@@ -1090,12 +1271,12 @@ src/core/pkg.generated.mbti     # 接口冻结产物（moon info）
 | --- | --- | --- | --- | --- |
 | Q1 | trait 中是否支持 `async fn`？ | 决定 6.4 是 trait 还是结构化函数记录 | ✅ **已定稿：支持**（实测，6.4） | M0 |
 | Q2 | `moonbit-community` 组织名是否可用？否则模块名如何定？ | 决定模块名与发布路径 | ✅ **已定稿：组织存在但不可自助发布 → 用 `lexchb/moon_vector`**（实测，13.3 / ADR-13） | 已定稿 |
-| Q3 | Payload 用 `Map[String, Json]` 还是强类型泛型？ | 决定 6.1 / Filter 的易用性 | ✅ **已定稿：用 `Map[String, Json]`（`pub type Payload`）**；强类型包装留到 M2 以 `PayloadOf[T]` 形式另加，不替换主线 | M1 |
+| Q3 | Payload 用 `Map[String, Json]` 还是强类型泛型？ | 决定 6.1 / Filter 的易用性 | ✅ **已定稿：用 `Map[String, Json]`（`pub type Payload`）**；原本留给 M2 的强类型包装已在 M2 决议不做（见 Q8），故主线不再变更 | M1 |
 | Q4 | 重复 `create_collection` 的语义 | 影响 C2 断言 | ✅ **已定稿：配置一致则幂等成功；配置不一致报 `Conflict`**（远端 Qdrant 在配置一致时返回 `result:false`，不一致返回 400 → 映射 Conflict） | M1 |
 | Q5 | `scroll` 的排序依据 | 影响 C12 断言与本地后端实现 | ✅ **已定稿：不承诺全局顺序**——只承诺「分页遍历不重不漏」；本地按插入序实现，远端按 Qdrant 返回序。C12 断言只比对集合相等且无重复 | M1 |
-| Q6 | Cosine 遇零向量的约定：报错还是返回固定分？ | 影响 C15 数值对齐 | 待定 | M2 |
+| Q6 | Cosine 遇零向量的约定：报错还是返回固定分？ | 影响 C15 数值对齐 | ✅ **已定稿：任一侧模长为 0 时把 `cos` 记作 0，本库 `score` 固定 1.0**（既不抛错也不产生 `NaN`，见 9.2 / ADR-15）。C15 黄金值排除零向量，M3 用真实 Qdrant 复核 | M2 |
 | Q7 | `score_threshold` 的比较方向 | 影响 C6 断言 | ✅ **已定稿（本库内部约定）：统一「越小越近」，保留 `score <= threshold` 的点**。⚠ 注意 Qdrant 的阈值方向随度量类型而变，M3 必须用真实 Qdrant 校准并在 README 声明 | M1 |
-| Q8 | 是否提供强类型 payload 映射（如泛型 `PayloadOf[T]`） | 影响 API 复杂度 | 待定 | M2 |
+| Q8 | 是否提供强类型 payload 映射（如泛型 `PayloadOf[T]`） | 影响 API 复杂度 | ❌ **M2 决议：不做（关闭）**。主线保持 `Map[String, Json]`（Q3）；申报书未承诺该能力，不影响验收。若 M4/M5 出现真实需求，另开新问题而不是回填本条 | M2 |
 | Q9 | 远端后端是否支持 serverless/cloud 端点（HTTPS + api-key） | 影响传输层默认配置 | 待定，`TransportOptions.base_url` 已支持 HTTPS | M3 |
 | Q10 | `@async.Mutex` 在 `js` / `wasm` 下是否可用（决定 9.4 的最终形态） | 影响本地后端并发承诺 | ✅ **已定稿：可用**，native/js/wasm 均验证通过（13.3） | 已定稿 |
 | Q11 | `moon.mod`（新格式）与 `moon.mod.json`（旧格式）最终取舍 | 影响 11.1 | ✅ **已定稿：用新格式 `moon.mod` / `moon.pkg`**——`moon fmt` 会自动完成迁移（M1 实测，见 13.4） | 已定稿 |
@@ -1145,6 +1326,16 @@ src/core/pkg.generated.mbti     # 接口冻结产物（moon info）
 | 枚举变体名遮蔽 | `PayloadSchema::Boolean`（避免与内建 `Bool` 撞名） | 变体名为 `Bool` 时，本包内 `Bool(x)` 会被解析成该变体，Json 布尔匹配静默走错分支；Json 布尔应匹配 `True` / `False` |
 | 黑盒测试命名 | `@core.VectorConfig::new(..)` | 在 `_test.mbt` 里用裸名会告警 `test_unqualified_package` |
 | 迁移 mod/pkg | 交给 `moon fmt` 自动迁移 | 手工维护 JSON 格式细节没有收益 |
+| **trait impl 的跨包可见性** | `pub impl Trait for Type with fn m(..)` | 裸 `impl` 只在**声明它的包内**可见，别的包报 `does not implement trait ...: no impl is defined`（M2 实测，同包测试永远发现不了） |
+| impl 块内的方法声明 | `pub impl Tr for T with fn m(self, ..)` | **不能写 `async`**：`with async fn m(..)` → 解析错误；异步性由 trait 声明决定 |
+| 泛型方法（含 trait 方法实现） | `fn[X : Eq + Show] Type::m(..)` | `fn Type::m[X : Eq + Show](..)` → 解析失败（泛型参数必须在名字**之前**） |
+| `Map` 字面量 | `Map([(k, v), ..])`；空表 `Map([])` | `{ "k": v }` 在**实参位置**会被当成块 → 报错位置指向无关的 `)`；`Map::new()` 已弃用 |
+| 常量 | `@math.PI` | `@math.pi` 已弃用（deprecated 告警） |
+| 测试 helper 调 `fail` | `fn helper(..) -> Unit raise { .. }` | helper 未声明错误类型 → `Function with error can only be used inside a function with error types in its signature` |
+| 结构体字面量的可见性 | 跨包读字段可以（`config.size`），**字面量构造**在 M2 实测可用（`ScrollPage`/`ScoredPoint` 在别的包构造成功） | 但只在「字段未被标 `priv`」时成立；`MemoryStore` 的字段刻意标了 `priv`，外部只能走 `new()` |
+| 公共类型缺 `Show` | 断言比较渲染后的字符串/布尔表达式 | core 的类型只 derive 了 `Eq`；`"\{x}"` 插值需要 `Show`，用它做断言会编译失败 |
+
+> **一条方法论**：MoonBit 的**解析错误会级联**成一大批看似无关的类型错误（M2 实例：`impl ... with async fn` 解析失败后，编译器在另一处报 `There is no record definition with the fields: points, next_offset`，而那个字面量完全正确）。遇到「类型错误难以理解」时，**先确认前面没有解析错误**，否则会照着错误信息往完全错误的方向改。
 
 ---
 
@@ -1156,8 +1347,10 @@ src/core/pkg.generated.mbti     # 接口冻结产物（moon info）
 | trait 不支持 async → 抽象层重构 | M1 返工 | M0 已验证支持，风险消除 | 已消除 |
 | `@async.retry` 擦除错误类型 | 无法实现精确重试策略 | 改为显式重试循环 | 已缓解（ADR-8） |
 | Qdrant JSON 联合形状与 derive 不符 | 编解码错误、静默丢条件 | 手写编解码 + 双向往返测试 + 一致性测试 C7–C10 | 已缓解（ADR-3） |
-| 本地后端距离语义与 Qdrant 不一致 | 一致性测试 C15 失败、用户信任受损 | M2 起固化 golden fixture，数值容差比对 | 待处理（Q6 未定） |
-| 过滤路径语义差异引发误用 | 用户排查困难 | 公开「已知差异」，不支持形式显式报 `Unsupported` | 待处理 |
+| 本地后端距离语义与 Qdrant 不一致 | 一致性测试 C15 失败、用户信任受损 | Q6 已定稿（ADR-15）；M2 已固化黄金值并做容差比对（10 节） | 部分缓解（M2 为**解析式手算**黄金值，M3 必须用真实 Qdrant 复核） |
+| **本库 `score` 与 Qdrant `score` 的换算未实测（M2 新增）** | Cosine / Dot 两个「相似度型」度量与 Qdrant 反号（9.2），若 M3 实测不符，C6/C15 与 README 全部要改 | 9.2 已把换算关系写成表格并在 README 预告；M3 用真实 Qdrant 对同批数据做数值比对 | 待处理（M3 必须闭环，不可拖过 M3） |
+| 过滤路径语义差异引发误用 | 用户排查困难 | 不支持形式显式报 `Unsupported`（**M2 已实现**）；9.6 已把逐个条件语义划线；README「已知差异」待 M5 落地 | 已缓解（M2） |
+| `text` 匹配在本地是子串近似，Qdrant 是分词全文 | 同一 filter 在两后端命中集合可能不同 | C9 只用「分词与子串结论一致」的样本；差异写入 README「已知差异」（M5） | 已缓解（M2，采样本规避） |
 | Docker 集成测试在 CI 上不稳定 / 本机无 Docker | 阻塞合并、M3 无法起步 | 集成作业与单元作业分离、可跳过；本地用 HTTP 桩（已实测可行） | 已缓解（ADR-12） |
 | 测试依赖共享状态导致不可重复 | 假性失败、CI 抖动 | 测试必须自包含；`async test` 并行执行这一事实写入 12.1 | 已缓解 |
 | 响应体过大 | 内存打爆 | 读入后校验长度上限（32MB），超限报 `Decode` | 待处理（Q12） |
