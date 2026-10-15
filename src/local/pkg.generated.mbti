@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lexchb/moon_vector/src/local"
+
+import {
+  "lexchb/moon_vector/src/core",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct MemoryStore {
+  // private fields
+}
+pub async fn MemoryStore::collection_exists(Self, String) -> Bool raise @core.VectorStoreError
+pub async fn MemoryStore::create_collection(Self, String, @core.VectorConfig) -> Unit raise @core.VectorStoreError
+pub async fn MemoryStore::create_payload_index(Self, String, String, @core.PayloadSchema) -> Unit raise @core.VectorStoreError
+pub async fn MemoryStore::delete_by_filter(Self, String, @core.Filter) -> Unit raise @core.VectorStoreError
+pub async fn MemoryStore::delete_collection(Self, String) -> Unit raise @core.VectorStoreError
+pub async fn MemoryStore::delete_points(Self, String, Array[@core.PointId]) -> Unit raise @core.VectorStoreError
+pub async fn MemoryStore::describe_collection(Self, String) -> @core.VectorConfig raise @core.VectorStoreError
+pub fn MemoryStore::new() -> Self
+pub async fn MemoryStore::retrieve(Self, String, Array[@core.PointId], Bool, Bool) -> Array[@core.StoredPoint] raise @core.VectorStoreError
+pub async fn MemoryStore::scroll(Self, String, @core.ScrollRequest) -> @core.ScrollPage raise @core.VectorStoreError
+pub async fn MemoryStore::search(Self, String, @core.SearchRequest) -> Array[@core.ScoredPoint] raise @core.VectorStoreError
+pub async fn MemoryStore::upsert(Self, String, Array[@core.Point], Bool) -> @core.UpsertResult raise @core.VectorStoreError
+pub impl @core.VectorStore for MemoryStore
+
+// Type aliases
+
+// Traits
