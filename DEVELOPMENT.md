@@ -6,8 +6,8 @@
 
 | 元信息 | 值 |
 | --- | --- |
-| 文档版本 | v1.5 |
-| 文档日期 | 2026-10-15 |
+| 文档版本 | v1.6 |
+| 文档日期 | 2026-10-18 |
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
 | 许可证 | Apache-2.0 |
@@ -39,6 +39,7 @@
 | v1.3 | 2026-10-14 | M1 完成：`src/core` 落地并三目标全绿；定稿 Q3/Q4/Q5/Q7/Q11；修正 API 声明（`pub(open) trait` / `pub(all) enum`）与 `PointId` 位宽；新增约束 5 与 13.4 | — |
 | v1.4 | 2026-10-15 | M2 完成：`src/local` 与 `conformance` 落地并三目标全绿；定稿 Q6（Cosine 零向量 → 固定分 1.0）与 Q8（强类型 payload 顺延出 M2）；**勘误两处**：`retrieve` 返回 `Array[StoredPoint]`（v1.3 误写 `ScoredPoint`）、包名为 `lexchb/moon_vector/src/core`；新增 9.5 错误语义表、9.6 过滤求值细则与 13.5 | — |
 | v1.5 | 2026-10-15 | **登记 M2 的代码审查结论**：新增 19 节「待修复清单」（B1–B7 工程性待办，均未修）与 15 节的 Q14（geo/values_count/is_empty 是否进共享套件）、Q15（scroll 游标的删除语义）、Q16（M3 校准清单）；13.5 补指向 | — |
+| v1.6 | 2026-10-18 | **回写申报书（Q13 定稿）**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按项目实际完成情况重写——仓库链接改为 `lexchb/moonbit-Qdrant`、模块名改为 `lexchb/moon_vector`、核心功能拆分为「已完成 / 规划中」并如实标注 M0–M2 完成、M3–M5 规划中 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -911,7 +912,7 @@ options(
 说明：
 
 - **模块名首段必须是发布者自己的 mooncakes 账号名**（官方文档明确要求 `<你的账号>/<模块名>`）。本机已登录账号为 **`lexchb`**（名下已有 `memcached`、`moonbit-texteditor`），故定为 `lexchb/moon_vector`。Q2 详见 15 节。
-- 申报书中的 `moonbit-community/moon_vector` **不可直接发布**：`moonbit-community` 是官方社区组织命名空间（索引中有 106 个包，含 `rabbita`、`elasticsearch` 等），但官方文档未提供自助加入或向他人命名空间发布的方式。**需回写申报书该行**。
+- 申报书中的 `moonbit-community/moon_vector` **不可直接发布**：`moonbit-community` 是官方社区组织命名空间（索引中有 106 个包，含 `rabbita`、`elasticsearch` 等），但官方文档未提供自助加入或向他人命名空间发布的方式。**该行已回写为 `lexchb/moon_vector`（Q13，2026-10-18，见 13.3）**。
 - 若将来通过社区流程加入该组织，模块名可迁移为 `moonbit-community/moon_vector`；由于 `moon add` 按模块名寻址，迁移只需同步 README 与本文档，不影响已发布版本。
 
 ### 11.2 包配置
@@ -1104,7 +1105,7 @@ jobs:
 
 结论：`moonbit-community/moon_vector` 不能自助发布 → 主线模块名定为 **`lexchb/moon_vector`**。已同步更新本文档元信息、11.1、11.2、13.1 与包路径注释。
 
-> **需回写申报书**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 第 8 行的 GitHub 仓库链接说明与「预期验收产物」中的 `moonbit-community/moon_vector` 应与本文档保持一致。因该文件是提交材料，我未擅自改动，请刘总确认后我来同步。
+> **申报书已回写（Q13，2026-10-18）**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按项目实际完成情况重写：仓库链接改为 `https://github.com/lexchb/moonbit-Qdrant.git`，「预期验收产物」中的模块名改为 `lexchb/moon_vector`，核心功能拆分为「已完成 / 规划中」并如实标注 M0–M2 完成、M3–M5 规划中。
 >
 > 后续若通过社区流程加入 `moonbit-community`，模块名再迁移即可（`moon add` 按模块名寻址，迁移只影响 README 与本文档）。
 
@@ -1260,7 +1261,7 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | ADR-10 | 每个实现包显式写 `extend Type with VectorStore::{..}` | 实测 trait 方法隐式提升已废弃，不写 `extend` 则用户只能用 `VectorStore::search(store, ..)` 形式 | 每个实现都要维护一行方法清单 |
 | ADR-11 | `MemoryStore` 内部用 `@async.Mutex` 串行化 | Q10 实测 Mutex 的互斥语义在 native/js/wasm 上均验证通过；`VectorStore` 方法本就是 async，加锁无 API 代价 | 本地后端写操作串行，不提供额外并行度 |
 | ADR-12 | 集成测试以本地 HTTP 桩兜底 | 本机无 Docker，无法用真实 Qdrant 起步；桩可精确复刻响应形状 | 桩与真实 Qdrant 可能有细节差异，CI 仍需跑真实容器 |
-| ADR-13 | 模块名用 `lexchb/moon_vector`，不用 `moonbit-community/*` | Q2 取证：官方发布路径只支持 `<自己的账号>/<模块名>`，无自助加入组织入口 | 与申报书原文不一致，需回写申报书；将来能否迁入组织不确定 |
+| ADR-13 | 模块名用 `lexchb/moon_vector`，不用 `moonbit-community/*` | Q2 取证：官方发布路径只支持 `<自己的账号>/<模块名>`，无自助加入组织入口 | 申报书已按实际完成情况回写（Q13，2026-10-18）；将来能否迁入组织不确定 |
 | ADR-14 | **`PointId::Num(UInt64)` 而非 `Int64`** | Qdrant 的 ID 是 u64，自动生成的随机 ID 约半数超出 2^63-1；用 Int64 会导致这些已存在的点读不回来（M1 实测修正，见 13.4） | 与本文档 v1.2 不一致；`UInt64` 字面量要写 `UL`，且需自行实现精确十进制解析 |
 | ADR-15 | **Cosine 零向量 → `score` 固定 1.0**（`cos` 记 0） | Q6 定稿。`NaN` 会让排序与 `score_threshold` 比较全部失效；抛错又与 Qdrant 行为不符。记 0 的语义可解释为「正交」 | 与 Qdrant 的零向量行为未经实测比对（无 Docker），M3 必须复核；C15 黄金值排除零向量 |
 | ADR-16 | **跨包 `import` 用完整包名（含 `src/`）**，如 `lexchb/moon_vector/src/core` | 包名 = 模块名 + 目录路径（由 `pkg.generated.mbti` 第 2 行确证）。v1.3 文档写的 `lexchb/moon_vector/core` 是错的，照抄会让 `local` / `remote` 的 import 全部编译失败 | 文档内所有包路径注释都要跟着改（v1.4 已改） |
@@ -1285,7 +1286,7 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | Q10 | `@async.Mutex` 在 `js` / `wasm` 下是否可用（决定 9.4 的最终形态） | 影响本地后端并发承诺 | ✅ **已定稿：可用**，native/js/wasm 均验证通过（13.3） | 已定稿 |
 | Q11 | `moon.mod`（新格式）与 `moon.mod.json`（旧格式）最终取舍 | 影响 11.1 | ✅ **已定稿：用新格式 `moon.mod` / `moon.pkg`**——`moon fmt` 会自动完成迁移（M1 实测，见 13.4） | 已定稿 |
 | Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | 待定，暂定 32MB 硬编码 | M3 |
-| Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | 待刘总确认后同步 PROPOSAL.md | M1 前 |
+| Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
 | Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面。现状：这三类只有 `local` 的白盒测试覆盖，`remote`（M3）拿不到共享断言 → 存在静默漂移的空间（B7） | 待定。倾向：并入 C7 或新增 C16，M3 随 remote 一起做 | M3 |
 | Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | 待定。M3 实测 Qdrant 行为后二选一：① 保持 `InvalidArgument` 并在 README 声明；② 改为「从插入序下一个位置继续」并放宽 C12 | M3 |
 | Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6） | 这四条都是本地按「合理推断」定稿的语义，**未经真实 Qdrant 验证**；一旦不符，会同时牵动 9.2/9.6、C6/C7/C9/C15 与 README「已知差异」 | 待 M3 用真实 Qdrant 逐条比对；不符则先改文档再改实现与套件期望 | M3 |
