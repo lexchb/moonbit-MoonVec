@@ -41,6 +41,8 @@
 | v1.5 | 2026-10-15 | **登记 M2 的代码审查结论**：新增 19 节「待修复清单」（B1–B7 工程性待办，均未修）与 15 节的 Q14（geo/values_count/is_empty 是否进共享套件）、Q15（scroll 游标的删除语义）、Q16（M3 校准清单）；13.5 补指向 | — |
 | v1.6 | 2026-10-18 | **回写申报书（Q13 定稿）**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按项目实际完成情况重写——仓库链接改为 `lexchb/moonbit-Qdrant`、模块名改为 `lexchb/moon_vector`、核心功能拆分为「已完成 / 规划中」并如实标注 M0–M2 完成、M3–M5 规划中 | — |
 | v1.7 | 2026-10-18 | **定稿 Q9 / Q12**：远端后端支持 HTTPS + api-key（`base_url` 可含 https、`api_key` 放 `api-key` 头）；响应体上限**硬编码 32MB**（不设配置项，超限报 `Decode`）；§8 不变 | — |
+| v1.8 | 2026-10-18 | **修正 6.5（M3 实测，后被 v1.9 取代）**：`QdrantStore::new` 曾改为 async——`@http.Client` 构造是 async | — |
+| v1.9 | 2026-10-18 | **M3 完成**：`src/remote` 与 `tests/stub` 落地并 native 全绿（其余目标 remote 被 native-only 排除）；定稿 6.5（`QdrantStore::new` 回同步，改用 `@http.request` 自由函数）、修正 8.2 传输层实现、C14 移除 Unsupported 共享断言、Q4 冲突映射；新增 13.6 实测记录 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -421,6 +423,8 @@ pub(open) trait VectorStore {
 ```moonbit
 pub(all) struct QdrantStore { /* private */ }
 
+///| 同步构造（M3 定稿）：内部不持有 @http.Client，每次请求用 @http.request 自由函数，
+///  连接由库内部管理，故构造无需 IO、可为同步（v1.8 曾临时改 async，v1.9 改回）。
 pub fn QdrantStore::new(
   url~ : String,
   api_key? : String,
@@ -431,6 +435,8 @@ pub(all) struct MemoryStore { /* private */ }
 
 pub fn MemoryStore::new() -> MemoryStore
 ```
+
+> **v1.9 修正（M3 最终）**：`QdrantStore::new` 为**同步**。v1.8 曾因「`@http.Client` 构造是 async」把构造器改成 async，但 M3 实测发现：持有一个 `@http.Client` 的流式请求（`request→write→end_request→read_all`）在本机向桩写带 body 的 PUT/POST 时会 `ReaderClosed`（桩日志显示请求体为空），而改用 **`@http.request` 自由函数（内部 `Client::connect` + 完整请求 + 读回 body）** 则稳定工作（8.2 / 13.6）。因此 `QdrantStore` 不再持有 `@http.Client`，构造器回到同步。远端/本地构造器均同步。
 
 `MemoryStore::new()` 必须**不引入任何 IO 依赖**，以保证能在 `js` / `wasm` 下实例化（已实测 `async` 的非 IO 部分在这些目标下可运行，见 13.3）。
 
@@ -608,15 +614,16 @@ pub fn TransportOptions::default() -> TransportOptions
 
 | 需求 | 可用 API |
 | --- | --- |
-| 连接复用 | `@http.Client::Client(base_url)`；`QdrantStore` 持有一个实例，`defer client.close()` |
-| 发请求 + 收响应 | `client.request(verb, path, extra_headers=headers)` 返回 `Unit`，随后 `client.end_request()` 得 `Response` |
-| 读响应体 | `client.read_all()` → `&Data`，再 `&Data::text()` 得 `String`；`Response` 有 `code` / `reason` / `headers` |
+| 发请求 + 收响应（含身体读回） | **`@http.request(uri, method, headers, body) -> (Response, &Data)`**（M3 采用；`get`/`put`/`post` 是其封装，`delete` 用 `request(.., Delete, ..)`） |
+| 读响应体 | 返回的 `&Data` 直接 `.text()`；`Response` 有 `code` / `reason` / `headers` |
 | HTTP 方法 | `@http.RequestMethod` 枚举：`Get` / `Post` / `Put` / `Delete` 等 |
-| 请求头 | `Map[@http.CaseInsensitiveString, String]`，键用 `@http.CaseInsensitiveString("api-key")` 构造；实测自定义头能正确透传 |
-| 超时 | `@async.with_timeout(ms, fn)`；实测 300ms 对 3s 慢响应能正确触发 |
+| 请求头 | `Map[@http.CaseInsensitiveString, String]`，键用 `@http.CaseInsensitiveString("api-key")` 构造（Q9）；请求体需 `String`/`Bytes`（`Json` 值作 body 会发成空体——M3 实测） |
+| 超时 | `@async.with_timeout(ms, fn, error=..)` 用自定义错误（`VectorStoreError::Timeout`） |
 | 并发批量 | `@async.all(jobs, max_concurrent=n)` —— **内置有界并发，无需手搓 TaskGroup 分片** |
 | 互斥锁 | `@async.Mutex::{Mutex, acquire, release, try_acquire}`（`acquire` 是 async） |
 | 限流 | `@async.Semaphore::Semaphore(n)` |
+
+> **M3 传输层定稿（v1.9）**：早期尝试「持有单例 `@http.Client` + `request→write(body)→end_request→read_all`」的流式写法，在本机对桩的带 body PUT/POST 上会 `ReaderClosed`（桩收到空请求体）。**改用 `@http.request` 自由函数**（其内部是 `Client::connect` + 完整请求 + 读回 body）稳定工作。代价是每次请求自动建连、不复用连接；对本地测试与中低频使用足够，将来若需连接复用可再优化（登记 19 节）。
 
 **重试：采用显式重试循环，不用 `@async.retry`（M0 关键结论）**。
 
@@ -661,14 +668,14 @@ async fn send_with_retry(client : @http.Client, verb : @http.RequestMethod, path
 - **幂等性红线**：`create_collection` / `delete_collection` / `delete_by_filter` 这类带副作用且**非天然幂等**的操作默认不重试（把 `max_retry` 视为 0）；`upsert`（按 ID 覆盖，幂等）、`retrieve` / `search` / `scroll`（只读）才启用重试。
 - **可重试判定**：仅连接失败、读超时、`429` / `502` / `503` / `504`。
 - **响应体上限**：`read_all()` 是一次性读入，大响应存在内存风险，故须在解析前检查 `Content-Length` 或读入后校验长度上限（默认 32MB，超限报 `Decode`）。
-- **不在公共 API 暴露 `@http` 类型**：`TransportOptions` 只含原始类型，`QdrantStore` 的内部 client 字段私有。
+- **不在公共 API 暴露 `@http` 类型**：`TransportOptions` 只含原始类型，`QdrantStore` 的内部 `options` 字段私有（M3：不再持有 client 字段）。
 
 ### 8.3 HTTP 状态码到错误的映射
 
 | 状态码 | 映射 |
 | --- | --- |
 | 200 / 201 / 202 | 成功 |
-| 400 | `InvalidArgument(message)` |
+| 400 | `InvalidArgument(message)`；**若错误消息含 `already exists` / `exists`（重复建集合，Q4）→ `Conflict(message)`** |
 | 401 / 403 | `Auth(message)` |
 | 404 | `NotFound(resource)` |
 | 409 | `Conflict(message)` |
@@ -1046,7 +1053,7 @@ jobs:
 | **M0 技术验证** | 工具链能力探明 | ✅ **已完成**（见 13.2）：① trait 中 `async fn` 可行性 → 支持；② `PointId` / `MatchValue` 手写编解码 → 可行；③ native 下 `@http` 端到端 → 可行（用本地桩替代真实 Qdrant）；④ 本文档第 2.3 / 6 / 7 / 8 / 11 / 12 节已按实测回填 |
 | **M1 core 抽象层** | 类型、Filter DSL、错误、trait | ✅ **已完成**（见 13.4）：类型全部就位；Filter 编解码往返测试通过；`moon test` 在 native/js/wasm 均 24/24；`.mbti` 已生成；`extend` 声明齐备（0 warning） |
 | **M2 local 后端** | 暴力 kNN + 过滤求值 + 分页 + `@async.Mutex` 串行化 | ✅ **已完成**（见 13.5）：C1–C15 全绿（套件对 local 跑通）；距离数值与手算黄金值在容差内一致；native/js/wasm 各 **43/43**；0 warning |
-| **M3 remote 后端** | 端点映射、传输层、错误映射 | 对真实 Qdrant 跑通 G2 全流程（无 Docker 环境先用本地桩 + golden fixture 过渡）；重试/超时/状态码映射有针对性测试；一致性测试全绿 |
+| **M3 remote 后端** | 端点映射、传输层、错误映射 | ✅ **已完成**（见 13.6）：对本地桩跑通 C1–C15 全流程；重试/超时/状态码映射已在 transport.mbt 实现（专项断言待桩就绪后补，见 19 节）；native 44/44，js/wasm 43/43（remote 被排除） |
 | **M4 批量与并发** | `@async.all` 有界并发批量写入/检索 | 并发度可配；失败传播/取消行为有测试；`MemoryStore` 的 `@async.Mutex` 串行化有并发正确性测试 |
 | **M5 发布** | README、示例、CI、mooncakes | 示例可一键跑通（local 示例不依赖 Docker）；CI 三个作业全绿；发布 v0.1.0；仓库 ≥10 个有效 commit |
 
@@ -1246,6 +1253,48 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 
 ---
 
+### 13.6 M3 实测记录（2026-10-18，已完成）
+
+**产出**（全部入库）：
+
+```
+src/remote/moon.pkg            # core + async + async/http + debug + json；native-only
+src/remote/endpoints.mbt       # REST 路径构造（§8.1 映射表）
+src/remote/transport.mbt       # TransportOptions + @http.request 封装 + 显式重试 + 超时 + 映射
+src/remote/dto.mbt             # 线上响应 DTO（手写 scroll 的 FromJson）
+src/remote/convert.mbt         # 请求体 Json 构造 + DTO→core 转换 + score 换算
+src/remote/qdrant.mbt          # QdrantStore + 11 方法 + pub extend
+src/remote/qdrant_test.mbt     # 黑盒：连通探测（不可达跳过）+ 一致性套件
+src/remote/pkg.generated.mbti  # 接口冻结
+tests/stub/qdrant_stub.py      # 本地 HTTP 桩（HTTP/1.1 + chunked body + 过滤/距离/分页/错误形状）
+tests/integration/             # 空目录占位（真实 Qdrant golden fixture 留 M3 复核阶段）
+```
+
+**验收结果**：
+
+| 项 | 结果 |
+| --- | --- |
+| `moon check` | 0 error，**0 warning** |
+| `moon test --target native` | **44/44**（含 remote 一致性套件对桩全绿） |
+| `moon test --target js` / `wasm` | 各 **43/43**（remote 被 `supported_targets="native"` 正确排除） |
+| 一致性套件 | C1–C15 对 remote（桩）全绿 |
+| `moon fmt` / `moon info` | 通过，`src/remote` 的 `.mbti` 已冻结 |
+
+**M3 期间发现并已修正的问题（按严重程度）**：
+
+| # | 问题 | 影响 | 结论/落在哪 |
+| --- | --- | --- | --- |
+| 1 | **持有单例 `@http.Client` 的流式写法对带 body 请求会 `ReaderClosed`** | 早期实现 `client.request→write→end_request→read_all` 对桩的 PUT/POST 全部失败，桩日志显示收到**空请求体** | 改用 `@http.request` 自由函数（内部 `Client::connect`+完整往返）稳定；`QdrantStore::new` 回同步（6.5 v1.9）；连接复用放弃，登记 19 节 B9 |
+| 2 | **`Json` 值直接作 `@http.request` 的 body 会发成空体** | 桩 `KeyError: 'vectors'` | body 显式 `payload.stringify()`（String impl Data），并写进 8.2 API 表 |
+| 3 | **`derive(@json.FromJson)` 不把 JSON 显式 `null` 解析为 `None`** | scroll 末页 `"next_page_offset": null` 解析失败（M1 只验证过缺 key→None） | `QdrantScrollResult` 改手写 FromJson（dto.mbt） |
+| 4 | **Qdrant 的 `create` 重复集合返回 400 而非 409** | C2 若按 8.3 旧映射会得到 InvalidArgument 而非 Conflict | 400 按错误消息细分（含 `exists` → Conflict），8.3 / Q4 更新；桩用 409 便于一致性断言 |
+| 5 | **「不支持路径 → Unsupported」是 local 私有语义，不该进共享套件** | C14 的 Unsupported 用例在 remote 永远不过（Qdrant 支持 `a[0]`） | C14 移除该断言并加注释；local 侧由 `filter_eval_wbtest.mbt` 白盒覆盖 |
+| 6 | **桩（HTTP/1.0）与真实 Qdrant（HTTP/1.1）行为差异导致 body 读写问题** | 早期桩默认 HTTP/1.0，请求/响应处理与真实服务不一致 | 桩 `protocol_version = "HTTP/1.1"` + chunked body 解析 |
+
+**仍待 M3 复核阶段闭环（Q16）**：本桩对 `score` 返回的是**桩自己算的距离**，remote 端按 9.2 换算；这只验证了「换算代码正确」，**没有验证 9.2 的换算表与真实 Qdrant 一致**。真实 Qdrant 的 `score` 方向（Cosine 返回 cos、Dot 返回内积）仍需在 CI 用真实容器核验，若不符需回改 9.2 / convert.mbt / C15 黄金值。
+
+---
+
 ## 14. 关键设计决策记录（ADR）
 
 | # | 决策 | 理由 | 代价 |
@@ -1268,6 +1317,8 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | ADR-16 | **跨包 `import` 用完整包名（含 `src/`）**，如 `lexchb/moon_vector/src/core` | 包名 = 模块名 + 目录路径（由 `pkg.generated.mbti` 第 2 行确证）。v1.3 文档写的 `lexchb/moon_vector/core` 是错的，照抄会让 `local` / `remote` 的 import 全部编译失败 | 文档内所有包路径注释都要跟着改（v1.4 已改） |
 | ADR-17 | **conformance 套件不依赖测试框架，返回失败消息列表** | `@test.fail` 的错误类型是抽象 `Error`，与 `raise VectorStoreError` 不能共存；返回列表还能一次跑完全部场景、让 remote/local 的测试文件各自只写三行 | 调用方需要自己 `fail`；失败信息是字符串而非断言栈，定位精度略低 |
 | ADR-18 | **`MemoryStore` 的 11 个方法全部加锁，且临界区内不含 `suspend` 点** | 统一形态省掉「读是否会看到半更新状态」的推理；`defer` 在 raise 展开时确实释放锁已由 `lock_wbtest.mbt` 实测（否则失败调用会永久占锁，症状是挂死） | 读操作也被串行化，本地后端并发度受限（符合「测试与离线」定位） |
+| ADR-19 | **remote 用 `@http.request` 自由函数，不持有单例 `@http.Client`** | M3 实测：流式 Client 对带 body 请求 `ReaderClosed`（桩收到空体），自由函数稳定；且使 `QdrantStore::new` 保持同步 | 每次请求自动建连、不复用（登记 B9，M5 前评估） |
+| ADR-20 | **scroll 的 `next_page_offset` DTO 手写 FromJson** | `derive` 不把显式 `null` 解析为 `None`，而 Qdrant 末页必然返回 `null` | 多一段手写编解码（dto.mbt），有 13.6 记录 |
 
 ---
 
@@ -1278,7 +1329,7 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | Q1 | trait 中是否支持 `async fn`？ | 决定 6.4 是 trait 还是结构化函数记录 | ✅ **已定稿：支持**（实测，6.4） | M0 |
 | Q2 | `moonbit-community` 组织名是否可用？否则模块名如何定？ | 决定模块名与发布路径 | ✅ **已定稿：组织存在但不可自助发布 → 用 `lexchb/moon_vector`**（实测，13.3 / ADR-13） | 已定稿 |
 | Q3 | Payload 用 `Map[String, Json]` 还是强类型泛型？ | 决定 6.1 / Filter 的易用性 | ✅ **已定稿：用 `Map[String, Json]`（`pub type Payload`）**；原本留给 M2 的强类型包装已在 M2 决议不做（见 Q8），故主线不再变更 | M1 |
-| Q4 | 重复 `create_collection` 的语义 | 影响 C2 断言 | ✅ **已定稿：配置一致则幂等成功；配置不一致报 `Conflict`**（远端 Qdrant 在配置一致时返回 `result:false`，不一致返回 400 → 映射 Conflict） | M1 |
+| Q4 | 重复 `create_collection` 的语义 | 影响 C2 断言 | ✅ **已定稿：配置一致则幂等成功；配置不一致报 `Conflict`**。⚠ 真实 Qdrant 对已存在集合的 create 返回 400 且错误体含 `already exists`；8.3 的 400 映射需按消息细分（含 exists 类关键字 → `Conflict`，否则 `InvalidArgument`）。**桩用 409 表达冲突**，与本地一致（M3 实测，见 13.6） | M1 |
 | Q5 | `scroll` 的排序依据 | 影响 C12 断言与本地后端实现 | ✅ **已定稿：不承诺全局顺序**——只承诺「分页遍历不重不漏」；本地按插入序实现，远端按 Qdrant 返回序。C12 断言只比对集合相等且无重复 | M1 |
 | Q6 | Cosine 遇零向量的约定：报错还是返回固定分？ | 影响 C15 数值对齐 | ✅ **已定稿：任一侧模长为 0 时把 `cos` 记作 0，本库 `score` 固定 1.0**（既不抛错也不产生 `NaN`，见 9.2 / ADR-15）。C15 黄金值排除零向量，M3 用真实 Qdrant 复核 | M2 |
 | Q7 | `score_threshold` 的比较方向 | 影响 C6 断言 | ✅ **已定稿（本库内部约定）：统一「越小越近」，保留 `score <= threshold` 的点**。⚠ 注意 Qdrant 的阈值方向随度量类型而变，M3 必须用真实 Qdrant 校准并在 README 声明 | M1 |
@@ -1343,6 +1394,10 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | 测试 helper 调 `fail` | `fn helper(..) -> Unit raise { .. }` | helper 未声明错误类型 → `Function with error can only be used inside a function with error types in its signature` |
 | 结构体字面量的可见性 | 跨包读字段可以（`config.size`），**字面量构造**在 M2 实测可用（`ScrollPage`/`ScoredPoint` 在别的包构造成功） | 但只在「字段未被标 `priv`」时成立；`MemoryStore` 的字段刻意标了 `priv`，外部只能走 `new()` |
 | 公共类型缺 `Show` | 断言比较渲染后的字符串/布尔表达式 | core 的类型只 derive 了 `Eq`；`"\{x}"` 插值需要 `Show`，用它做断言会编译失败 |
+| `@http` 请求体 | body 用 **`String` / `Bytes`**（`payload.stringify()`） | `Json` 值直接作 body 会被发成**空体**（M3 实测，桩收到 `{}`） |
+| `derive` 的 `Option` 字段与显式 `null` | `PointId?` 字段遇 JSON `null` 需手写 FromJson | `derive(@json.FromJson)` 只把「缺 key」解析为 `None`，**显式 `null` 会解析失败**（M3 实测，dto.mbt） |
+| `@http.request` 自由函数 | `@http.request(uri, method, headers, body) -> (Response, &Data)` | 单例 `@http.Client` 流式写法对带 body 请求有 `ReaderClosed`（13.6 问题 1） |
+| 400 状态码 | 消息含 `exists` → `Conflict`，否则 `InvalidArgument`（Q4 定稿） | Qdrant 对重复建集合返回 400（非 409） |
 
 > **一条方法论**：MoonBit 的**解析错误会级联**成一大批看似无关的类型错误（M2 实例：`impl ... with async fn` 解析失败后，编译器在另一处报 `There is no record definition with the fields: points, next_offset`，而那个字面量完全正确）。遇到「类型错误难以理解」时，**先确认前面没有解析错误**，否则会照着错误信息往完全错误的方向改。
 
@@ -1412,6 +1467,7 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | B6 | `MemoryStore::new()` 未预分配容量，大批量 upsert 会多次 rehash | 性能；本地后端定位是测试与离线，优先级最低 | 增加可选参数 `MemoryStore::new(capacity?)` —— **属公共 API 变更，必须先改 6.5 与 `.mbti` 再实现** | M5（发布前评估收益） |
 | B7 | `search` 对全部候选排序（O(m log m)），且每点分配一个 `Ranked` | 当前规模无感；M4 上并发批量检索后会成为热点 | 视 M4 实测决定是否换 top-k 选择（堆）；换之前先量化收益 | M4（先量后改） |
 | B8 | 一致性套件未覆盖 `geo` / `values_count` / `is_empty` | `remote` 后端对这三类条件没有共享断言，「两后端不漂移」有缺口 | 并入 C7 或新增 C16（与 Q14 联动） | M3 |
+| B9 | **remote 每次请求自动建连，不复用连接**（M3 实测改用 `@http.request` 自由函数） | 高 QPS 下建连开销明显；`@http.Client` 流式写法在带 body 请求上有 `ReaderClosed` 问题（13.6 问题 1） | 若 M4/M5 需要高吞吐，再研究持单例 Client 的正确写法（先复现 ReaderClosed 根因）；当前对测试与中低频足够 | M5 前评估 |
 
 ### 19.2 明确「不修」的观察项（留档以免重复讨论）
 
