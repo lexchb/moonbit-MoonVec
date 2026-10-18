@@ -1,0 +1,16 @@
+import {
+  "lexchb/moon_vector/src/core",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+import {
+  "lexchb/moon_vector/conformance",
+  "moonbitlang/core/env",
+} for "test"
+
+options(
+  supported_targets: "native",
+)

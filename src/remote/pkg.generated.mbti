@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "lexchb/moon_vector/src/remote"
+
+import {
+  "lexchb/moon_vector/src/core",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct QdrantStore {
+  // private fields
+}
+pub async fn QdrantStore::collection_exists(Self, String) -> Bool raise @core.VectorStoreError
+pub async fn QdrantStore::create_collection(Self, String, @core.VectorConfig) -> Unit raise @core.VectorStoreError
+pub async fn QdrantStore::create_payload_index(Self, String, String, @core.PayloadSchema) -> Unit raise @core.VectorStoreError
+pub async fn QdrantStore::delete_by_filter(Self, String, @core.Filter) -> Unit raise @core.VectorStoreError
+pub async fn QdrantStore::delete_collection(Self, String) -> Unit raise @core.VectorStoreError
+pub async fn QdrantStore::delete_points(Self, String, Array[@core.PointId]) -> Unit raise @core.VectorStoreError
+pub async fn QdrantStore::describe_collection(Self, String) -> @core.VectorConfig raise @core.VectorStoreError
+pub fn QdrantStore::new(url~ : String, api_key? : String, options? : TransportOptions) -> Self
+pub async fn QdrantStore::retrieve(Self, String, Array[@core.PointId], Bool, Bool) -> Array[@core.StoredPoint] raise @core.VectorStoreError
+pub async fn QdrantStore::scroll(Self, String, @core.ScrollRequest) -> @core.ScrollPage raise @core.VectorStoreError
+pub async fn QdrantStore::search(Self, String, @core.SearchRequest) -> Array[@core.ScoredPoint] raise @core.VectorStoreError
+pub async fn QdrantStore::upsert(Self, String, Array[@core.Point], Bool) -> @core.UpsertResult raise @core.VectorStoreError
+pub impl @core.VectorStore for QdrantStore
+
+pub(all) struct TransportOptions {
+  base_url : String
+  api_key : String?
+  timeout_ms : Int
+  max_retry : Int
+  retry_initial_ms : Int
+  retry_factor : Double
+  retry_max_ms : Int
+  max_concurrency : Int
+}
+pub fn TransportOptions::default() -> Self
+pub fn TransportOptions::new(base_url~ : String, api_key~ : String?, timeout_ms? : Int, max_retry? : Int, retry_initial_ms? : Int, retry_factor? : Double, retry_max_ms? : Int, max_concurrency? : Int) -> Self
+
+// Type aliases
+
+// Traits
