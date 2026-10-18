@@ -6,7 +6,7 @@
 
 | 元信息 | 值 |
 | --- | --- |
-| 文档版本 | v1.6 |
+| 文档版本 | v1.7 |
 | 文档日期 | 2026-10-18 |
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
@@ -40,6 +40,7 @@
 | v1.4 | 2026-10-15 | M2 完成：`src/local` 与 `conformance` 落地并三目标全绿；定稿 Q6（Cosine 零向量 → 固定分 1.0）与 Q8（强类型 payload 顺延出 M2）；**勘误两处**：`retrieve` 返回 `Array[StoredPoint]`（v1.3 误写 `ScoredPoint`）、包名为 `lexchb/moon_vector/src/core`；新增 9.5 错误语义表、9.6 过滤求值细则与 13.5 | — |
 | v1.5 | 2026-10-15 | **登记 M2 的代码审查结论**：新增 19 节「待修复清单」（B1–B7 工程性待办，均未修）与 15 节的 Q14（geo/values_count/is_empty 是否进共享套件）、Q15（scroll 游标的删除语义）、Q16（M3 校准清单）；13.5 补指向 | — |
 | v1.6 | 2026-10-18 | **回写申报书（Q13 定稿）**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按项目实际完成情况重写——仓库链接改为 `lexchb/moonbit-Qdrant`、模块名改为 `lexchb/moon_vector`、核心功能拆分为「已完成 / 规划中」并如实标注 M0–M2 完成、M3–M5 规划中 | — |
+| v1.7 | 2026-10-18 | **定稿 Q9 / Q12**：远端后端支持 HTTPS + api-key（`base_url` 可含 https、`api_key` 放 `api-key` 头）；响应体上限**硬编码 32MB**（不设配置项，超限报 `Decode`）；§8 不变 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -1282,10 +1283,10 @@ conformance/pkg.generated.mbti    # 只暴露 run_conformance
 | Q6 | Cosine 遇零向量的约定：报错还是返回固定分？ | 影响 C15 数值对齐 | ✅ **已定稿：任一侧模长为 0 时把 `cos` 记作 0，本库 `score` 固定 1.0**（既不抛错也不产生 `NaN`，见 9.2 / ADR-15）。C15 黄金值排除零向量，M3 用真实 Qdrant 复核 | M2 |
 | Q7 | `score_threshold` 的比较方向 | 影响 C6 断言 | ✅ **已定稿（本库内部约定）：统一「越小越近」，保留 `score <= threshold` 的点**。⚠ 注意 Qdrant 的阈值方向随度量类型而变，M3 必须用真实 Qdrant 校准并在 README 声明 | M1 |
 | Q8 | 是否提供强类型 payload 映射（如泛型 `PayloadOf[T]`） | 影响 API 复杂度 | ❌ **M2 决议：不做（关闭）**。主线保持 `Map[String, Json]`（Q3）；申报书未承诺该能力，不影响验收。若 M4/M5 出现真实需求，另开新问题而不是回填本条 | M2 |
-| Q9 | 远端后端是否支持 serverless/cloud 端点（HTTPS + api-key） | 影响传输层默认配置 | 待定，`TransportOptions.base_url` 已支持 HTTPS | M3 |
+| Q9 | 远端后端是否支持 serverless/cloud 端点（HTTPS + api-key） | 影响传输层默认配置 | ✅ **已定稿：支持**。`base_url` 已可含 `https://`；`api_key` 放入 `api-key` 请求头（M0 已实测自定义头正确透传）。serverless 端点的额外限制（如 tls 校验）留待 CI 真实验证 | M3 |
 | Q10 | `@async.Mutex` 在 `js` / `wasm` 下是否可用（决定 9.4 的最终形态） | 影响本地后端并发承诺 | ✅ **已定稿：可用**，native/js/wasm 均验证通过（13.3） | 已定稿 |
 | Q11 | `moon.mod`（新格式）与 `moon.mod.json`（旧格式）最终取舍 | 影响 11.1 | ✅ **已定稿：用新格式 `moon.mod` / `moon.pkg`**——`moon fmt` 会自动完成迁移（M1 实测，见 13.4） | 已定稿 |
-| Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | 待定，暂定 32MB 硬编码 | M3 |
+| Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | ✅ **已定稿：硬编码 32MB，不设配置项**。理由：上限只是内存防护不是业务参数，设配置项会让公共 API 膨胀；超限报 `Decode`（8.2）。若未来出现真实需求再提 | M3 |
 | Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
 | Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面。现状：这三类只有 `local` 的白盒测试覆盖，`remote`（M3）拿不到共享断言 → 存在静默漂移的空间（B7） | 待定。倾向：并入 C7 或新增 C16，M3 随 remote 一起做 | M3 |
 | Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | 待定。M3 实测 Qdrant 行为后二选一：① 保持 `InvalidArgument` 并在 README 声明；② 改为「从插入序下一个位置继续」并放宽 C12 | M3 |
