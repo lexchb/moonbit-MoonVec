@@ -1004,29 +1004,10 @@ async fn check_c14(
     "C14", "limit<1 的错误种类", bad_limit, "InvalidArgument",
   )
 
-  let unsupported = try {
-    ignore(
-      store.search(
-        name,
-        @core.SearchRequest::new(
-          vector=[1.0, 0.0, 0.0, 0.0],
-          limit=1,
-          filter=@core.Filter::new(must=[
-            @core.Clause::from_condition(
-              @core.Condition::match_str("a[0]", "x"),
-            ),
-          ]),
-        ),
-      ),
-    )
-    "no-error"
-  } catch {
-    @core.VectorStoreError::Unsupported(_) => "Unsupported"
-    _ => "other"
-  }
-  suite.expect_eq(
-    "C14", "显式下标路径的错误种类", unsupported, "Unsupported",
-  )
+  // 说明：C14 不再断言「不支持路径 → Unsupported」。该语义是 local 私有的
+  // （Qdrant 本身支持 `a[0]` 数组下标，见 9.6 路径语义划线）；远端若真遇到
+  // 不支持的路径会由 Qdrant 返回 4xx。local 侧的 Unsupported 由
+  // `src/local/filter_eval_wbtest.mbt` 白盒覆盖，两后端此行为本就不该一致。
 
   // 维度不符的写入不能留下副作用
   let still_five = scroll_all(store, name, 2)
