@@ -6,14 +6,14 @@
 
 | 元信息 | 值 |
 | --- | --- |
-| 文档版本 | v1.7 |
-| 文档日期 | 2026-10-18 |
+| 文档版本 | v1.10 |
+| 文档日期 | 2026-10-20 |
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
 | 许可证 | Apache-2.0 |
 | 已验证工具链 | `moon 0.1.20260920` / `moonc 0.10.14` + `moonbitlang/async 0.22.1`（详见 13.2） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
-| 当前进度 | M0、M1、M2 已完成（M2 见 13.5；`src/core` + `src/local` + `conformance` 三目标全绿）；**M2 留下的待修复项见 19 节** |
+| 当前进度 | M0–M3 已完成（M2 见 13.5、M3 见 13.6；native 44/44，js/wasm 各 43/43）；**M4 批量与并发进行中（见 6.6 / 13.7）** |
 
 > 包路径勘误（v1.4）：MoonBit 的包名是「模块名 + 目录路径」，因此 `src/core` 的真实包名是
 > **`lexchb/moon_vector/src/core`**（而不是 v1.3 里写的 `lexchb/moon_vector/core`）。
@@ -43,6 +43,7 @@
 | v1.7 | 2026-10-18 | **定稿 Q9 / Q12**：远端后端支持 HTTPS + api-key（`base_url` 可含 https、`api_key` 放 `api-key` 头）；响应体上限**硬编码 32MB**（不设配置项，超限报 `Decode`）；§8 不变 | — |
 | v1.8 | 2026-10-18 | **修正 6.5（M3 实测，后被 v1.9 取代）**：`QdrantStore::new` 曾改为 async——`@http.Client` 构造是 async | — |
 | v1.9 | 2026-10-18 | **M3 完成**：`src/remote` 与 `tests/stub` 落地并 native 全绿（其余目标 remote 被 native-only 排除）；定稿 6.5（`QdrantStore::new` 回同步，改用 `@http.request` 自由函数）、修正 8.2 传输层实现、C14 移除 Unsupported 共享断言、Q4 冲突映射；新增 13.6 实测记录 | — |
+| v1.10 | 2026-10-20 | **M4 完成**：core 新增批次并发门面 `batch_write` / `batch_search`（`@async.all` 有界并发、失败整组取消）；core 由「零运行时依赖」改为正式依赖 async 非 IO 部分（4.2 / 11.2 更新）；新增 6.6 与 13.7 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -142,8 +143,8 @@
 
 ### 4.2 依赖方向（硬约束）
 
-- `core` **不得**依赖 `@http`、`@async` 的 IO 部分、`local`、`remote`。
-- `local` 只依赖 `core` + `@async`（**M2 实测修正**：`MemoryStore` 内部持有 `@async.Mutex`，故 `async` 是 local 的**正式运行时依赖**，与 core 的 `for "test"` 不同）。local 不使用 `@json` 的函数式 API（`Json` 类型与其智能构造器来自内建，无需 import）。
+- `core` **不得**依赖 `@http`、`@async` 的 **IO 部分**、`local`、`remote`。**M4 修正**：`core` 现在**正式依赖 `@async` 的非 IO 部分**（`@async.all` / task group，供 6.6 的批次并发门面用），不再「零运行时依赖」；这仍不违反「不得依赖 IO 部分」，见 11.2。
+- `local` 只依赖 `core` + `@async`（`MemoryStore` 持有 `@async.Mutex`）。local 不使用 `@json` 的函数式 API。
 - `remote` 依赖 `core` + `@async` + `@async/http`，且 `supported_targets = "native"`。
 - `core` 与 `local` 不做 target 限制，须在 `js` / `wasm` / `native` 全部通过测试（`wasm-gc` 只要求 `moon check` 通过）。
 - 禁止反向依赖，禁止 `core` 里出现任何 Qdrant 专有字段名。
@@ -439,6 +440,43 @@ pub fn MemoryStore::new() -> MemoryStore
 > **v1.9 修正（M3 最终）**：`QdrantStore::new` 为**同步**。v1.8 曾因「`@http.Client` 构造是 async」把构造器改成 async，但 M3 实测发现：持有一个 `@http.Client` 的流式请求（`request→write→end_request→read_all`）在本机向桩写带 body 的 PUT/POST 时会 `ReaderClosed`（桩日志显示请求体为空），而改用 **`@http.request` 自由函数（内部 `Client::connect` + 完整请求 + 读回 body）** 则稳定工作（8.2 / 13.6）。因此 `QdrantStore` 不再持有 `@http.Client`，构造器回到同步。远端/本地构造器均同步。
 
 `MemoryStore::new()` 必须**不引入任何 IO 依赖**，以保证能在 `js` / `wasm` 下实例化（已实测 `async` 的非 IO 部分在这些目标下可运行，见 13.3）。
+
+---
+
+### 6.6 批次与并发门面（core，M4）
+
+对任意 `VectorStore` 都通用的「并发批量写入 / 检索」门面。基于 `@async.all`（**确认语义**：结果按 `tasks` 顺序返回；任一任务失败即取消其余并传播该错误）。
+
+```moonbit
+///| 有界并发批量 upsert。
+/// points 按 batch_size 切成子批次，每个子批次一次 upsert，最多 max_concurrent 个并发。
+/// 任一子批次失败 → 整组取消，上抛该错误（已成功写入的部分保留，不回滚）。
+pub async fn batch_write(
+  store : &VectorStore,
+  collection : String,
+  points : Array[Point],
+  batch_size~ : Int,
+  max_concurrent? : Int = 4,
+  wait? : Bool = true,
+) -> Unit raise VectorStoreError
+
+///| 有界并发批量检索。一次跑多个 SearchRequest，返回与 requests 同序的结果数组。
+/// 任一请求失败 → 整组取消，上抛该错误。
+pub async fn batch_search(
+  store : &VectorStore,
+  collection : String,
+  requests : Array[SearchRequest],
+  max_concurrent? : Int = 4,
+) -> Array[Array[ScoredPoint]] raise VectorStoreError
+```
+
+语义与约束：
+
+- **并发度**：`max_concurrent` 缺省 4（与 `TransportOptions.max_concurrency` 默认一致）；`<= 0` 或 `batch_size <= 0` → `InvalidArgument`。
+- **空输入**：`points` 为空 → 直接成功返回（无任务）；`requests` 为空 → 返回空数组。
+- **与后端的关系**：对 `remote`，批次并发 = 同时进行的 HTTP 请求数；对 `local`，并发子批次会被 `MemoryStore` 内部的 `@async.Mutex` **串行化**（9.4）——批次门面在 local 上正确、但无性能增益（这正是 9.4 所说的「可直接用于 `@async.all` 并发批量写」）。
+- **失败语义**：任一子任务失败即取消整组并传播第一个错误（`@async.all` 语义）。`batch_write` 不保证幂等回滚——失败时已写入的子批次保留。
+- **不增加状态**：门面是自由函数（吃 `&VectorStore`），无自有状态，因此不需要 `pub(open)` / 实例方法，也不需 `extend` 声明（直接 `@core.batch_write(store, ..)` 调用）。
 
 ---
 
@@ -925,19 +963,16 @@ options(
 
 ### 11.2 包配置
 
-**使用新格式 `moon.pkg`**（同样由 `moon fmt` 迁移生成）。`src/core/moon.pkg` 实际内容：
+**使用新格式 `moon.pkg`**（同样由 `moon fmt` 迁移生成）。`src/core/moon.pkg` 实际内容（**M4 起正式依赖 async**）：
 
 ```moon
 import {
+  "moonbitlang/async",
   "moonbitlang/core/json",
 }
-
-import {
-  "moonbitlang/async",
-} for "test"
 ```
 
-- `core` 的**生产 API 不依赖 async 运行时**（M1 实测：trait 里声明 `async fn` 并不需要 import async；原 `import` 里的 async 被判为 `unused_package`）。运行时只在测试期需要，故用 `for "test"` 声明 —— 这样 `core` 可以保持零运行时依赖，跨目标更干净。
+- `core` 的**生产 API 依赖 async 的非 IO 部分**（M4）：`batch_write` / `batch_search`（6.6）用 `@async.all` / task group，故 `async` 改为**正式 import**。这仍不违反 4.2「core 不得依赖 `@async` 的 IO 部分」——`@async.all` 是非 IO 的并发原语。trait 里声明 `async fn` 本身不需要 import async（M1），但批次门面要。若未来移除批次门面，可回到 `for "test"`。
 - `src/local/moon.pkg` 实际内容（M2）：**`async` 是正式依赖**（`MemoryStore` 持有 `@async.Mutex`），`core` 也是正式依赖；`conformance` 只在测试期用得上，故 `for "test"`：
 
 ```moon
@@ -1054,7 +1089,7 @@ jobs:
 | **M1 core 抽象层** | 类型、Filter DSL、错误、trait | ✅ **已完成**（见 13.4）：类型全部就位；Filter 编解码往返测试通过；`moon test` 在 native/js/wasm 均 24/24；`.mbti` 已生成；`extend` 声明齐备（0 warning） |
 | **M2 local 后端** | 暴力 kNN + 过滤求值 + 分页 + `@async.Mutex` 串行化 | ✅ **已完成**（见 13.5）：C1–C15 全绿（套件对 local 跑通）；距离数值与手算黄金值在容差内一致；native/js/wasm 各 **43/43**；0 warning |
 | **M3 remote 后端** | 端点映射、传输层、错误映射 | ✅ **已完成**（见 13.6）：对本地桩跑通 C1–C15 全流程；重试/超时/状态码映射已在 transport.mbt 实现（专项断言待桩就绪后补，见 19 节）；native 44/44，js/wasm 43/43（remote 被排除） |
-| **M4 批量与并发** | `@async.all` 有界并发批量写入/检索 | 并发度可配；失败传播/取消行为有测试；`MemoryStore` 的 `@async.Mutex` 串行化有并发正确性测试 |
+| **M4 批量与并发** | 批次写入/检索门面（`batch_write` / `batch_search`，`@async` 有界并发） | ✅ **已完成**（见 13.7）：并发度可配；失败传播经返回元组精确上抛并有测试；`MemoryStore` 的 `@async.Mutex` 串行化正确性已有 `lock_wbtest` + `batch_test` 覆盖；native 49/49、js/wasm 48/48 |
 | **M5 发布** | README、示例、CI、mooncakes | 示例可一键跑通（local 示例不依赖 Docker）；CI 三个作业全绿；发布 v0.1.0；仓库 ≥10 个有效 commit |
 
 ### 13.1 最终验收清单（对应申报书「预期验收产物」）
@@ -1295,6 +1330,41 @@ tests/integration/             # 空目录占位（真实 Qdrant golden fixture 
 
 ---
 
+### 13.7 M4 实测记录（2026-10-20，已完成）
+
+**产出**（全部入库）：
+
+```
+src/core/batch.mbt              # batch_write / batch_search（@async.all 有界并发 + chunk）
+src/core/moon.pkg               # async 由 for "test" 改为正式依赖（M4 起）
+src/core/pkg.generated.mbti     # 接口冻结含 batch_write / batch_search
+src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传播/参数校验/空输入（5 个）
+```
+
+**验收结果**：
+
+| 项 | 结果 |
+| --- | --- |
+| `moon check` | 0 error，**0 warning** |
+| `moon test --target native` | **49/49** |
+| `moon test --target js` / `wasm` | 各 **48/48**（remote 被 native-only 排除；core 正式依赖 async 跨目标成立） |
+| 批次门面 | 对 `MemoryStore`：并发写 120 点分 3 批条数正确、覆盖写串行正确、并发检索同序、失败精确上抛 |
+
+> 测试计数 49 = 原 44 + 5（batch_test）。js/wasm 48 = 49 − 1（remote conformance 仅 native）。
+
+**M4 期间发现并已修正的问题（按严重程度）**：
+
+| # | 问题 | 影响 | 结论/落在哪 |
+| --- | --- | --- | --- |
+| 1 | **`@async.all` / `with_task_group` 会把子任务错误擦除为抽象 `Error`** | 批次门面 `raise VectorStoreError` 与 task group 传导的错误类型静态不匹配（Error 4118）。与 M0 的 `@async.retry` 是同一个坑（`spawn_bg` 签名 `async () -> Unit`） | 子任务各自 `catch` 自身错误，返回 `(结果, VectorStoreError?)` 元组；`@async.all` 正常跑完后扫描第一个 `Some(e)` 并 `raise`。错误精确传播、并发保持 |
+| 2 | **`@async.all` 调用点仍静态报错** | 即使子任务不 raise，`@async.all` 内部 task group 仍被推断可抛抽象 `Error` | 用 `try { @async.all(..) } catch { _ => raise Transport(..) }` 显式转成 `VectorStoreError`（正常运行不触发） |
+| 3 | 可选参数 `max_concurrent? : Int = 4` 在函数体是 `Int`（非 Option） | 误写 `is Some(n)` 判断、`?` 转发都报类型错 | 体内直接 `if max_concurrent < 1` 校验；调用 `@async.all(.., max_concurrent=max_concurrent)` 命名传参 |
+| 4 | `fn chunk[T]` 泛型参数位置错误 | 应 `fn[T] chunk`（M1 坑） | 已改，记入 16.1 |
+
+**M4 明确推迟的取舍**：批次失败时**不 fail-fast**（不中断其余并发子任务），而是在全部跑完后统一上抛第一个错误。这是为「错误精确 + 并发 + 实现最简」的取舍；「失败立即取消其余」登记为 M5 优化（见 19 节 B10）。
+
+---
+
 ## 14. 关键设计决策记录（ADR）
 
 | # | 决策 | 理由 | 代价 |
@@ -1319,6 +1389,7 @@ tests/integration/             # 空目录占位（真实 Qdrant golden fixture 
 | ADR-18 | **`MemoryStore` 的 11 个方法全部加锁，且临界区内不含 `suspend` 点** | 统一形态省掉「读是否会看到半更新状态」的推理；`defer` 在 raise 展开时确实释放锁已由 `lock_wbtest.mbt` 实测（否则失败调用会永久占锁，症状是挂死） | 读操作也被串行化，本地后端并发度受限（符合「测试与离线」定位） |
 | ADR-19 | **remote 用 `@http.request` 自由函数，不持有单例 `@http.Client`** | M3 实测：流式 Client 对带 body 请求 `ReaderClosed`（桩收到空体），自由函数稳定；且使 `QdrantStore::new` 保持同步 | 每次请求自动建连、不复用（登记 B9，M5 前评估） |
 | ADR-20 | **scroll 的 `next_page_offset` DTO 手写 FromJson** | `derive` 不把显式 `null` 解析为 `None`，而 Qdrant 末页必然返回 `null` | 多一段手写编解码（dto.mbt），有 13.6 记录 |
+| ADR-21 | **批次门面放 core，且子任务不靠 task group 传错** | M4 实测 task group / `@async.all` 把子任务错误擦除为抽象 `Error`；子任务各自 `catch` 返回 `(结果, Error?)`，`@async.all` 跑完后扫描并 `raise` 第一个。错误精确、并发保持 | 失去 fail-fast（登记 B10，M5 评估） |
 
 ---
 
@@ -1398,6 +1469,8 @@ tests/integration/             # 空目录占位（真实 Qdrant golden fixture 
 | `derive` 的 `Option` 字段与显式 `null` | `PointId?` 字段遇 JSON `null` 需手写 FromJson | `derive(@json.FromJson)` 只把「缺 key」解析为 `None`，**显式 `null` 会解析失败**（M3 实测，dto.mbt） |
 | `@http.request` 自由函数 | `@http.request(uri, method, headers, body) -> (Response, &Data)` | 单例 `@http.Client` 流式写法对带 body 请求有 `ReaderClosed`（13.6 问题 1） |
 | 400 状态码 | 消息含 `exists` → `Conflict`，否则 `InvalidArgument`（Q4 定稿） | Qdrant 对重复建集合返回 400（非 409） |
+| 可选参数在函数体 | `max_concurrent? : Int = 4` 体内是 **`Int` 不是 `Option`**；校验用 `if x < 1`，传给另一可选参数用 `name=x` | 不能 `is Some(n)` 判断；`?` 转发（`f(x?)`）对带默认值的参数不可用 |
+| task group 子任务错误 | 子任务 `catch` 自身错误、返回 `(结果, Error?)`，外层扫描后 `raise` | `@async.all` / `with_task_group` / `spawn_bg` 会把子任务错误**擦除为抽象 `Error`**，无法与 `raise SpecificError` 精确匹配（M4 实测，同 M0 的 `@async.retry` 坑） |
 
 > **一条方法论**：MoonBit 的**解析错误会级联**成一大批看似无关的类型错误（M2 实例：`impl ... with async fn` 解析失败后，编译器在另一处报 `There is no record definition with the fields: points, next_offset`，而那个字面量完全正确）。遇到「类型错误难以理解」时，**先确认前面没有解析错误**，否则会照着错误信息往完全错误的方向改。
 
@@ -1468,6 +1541,7 @@ tests/integration/             # 空目录占位（真实 Qdrant golden fixture 
 | B7 | `search` 对全部候选排序（O(m log m)），且每点分配一个 `Ranked` | 当前规模无感；M4 上并发批量检索后会成为热点 | 视 M4 实测决定是否换 top-k 选择（堆）；换之前先量化收益 | M4（先量后改） |
 | B8 | 一致性套件未覆盖 `geo` / `values_count` / `is_empty` | `remote` 后端对这三类条件没有共享断言，「两后端不漂移」有缺口 | 并入 C7 或新增 C16（与 Q14 联动） | M3 |
 | B9 | **remote 每次请求自动建连，不复用连接**（M3 实测改用 `@http.request` 自由函数） | 高 QPS 下建连开销明显；`@http.Client` 流式写法在带 body 请求上有 `ReaderClosed` 问题（13.6 问题 1） | 若 M4/M5 需要高吞吐，再研究持单例 Client 的正确写法（先复现 ReaderClosed 根因）；当前对测试与中低频足够 | M5 前评估 |
+| B10 | **批次失败不 fail-fast**（M4 取舍）：`batch_write` / `batch_search` 失败时等全部子任务跑完才统一抛第一个错误，而不是立即取消其余 | G6 原文含「失败可整组取消」；M4 因 task group 错误类型被擦除而选择了「错误精确 + 并发 + 实现最简」 | 若需 fail-fast，改用「子任务不 catch、错误经 `with_task_group` 传导」配合能精确捕获的错误类型方案；或引入自研有界并发调度器。M5 评估收益后再做 | M5 前评估 |
 
 ### 19.2 明确「不修」的观察项（留档以免重复讨论）
 

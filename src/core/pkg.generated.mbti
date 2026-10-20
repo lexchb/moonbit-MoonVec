@@ -6,6 +6,9 @@ import {
 }
 
 // Values
+pub async fn batch_search(&VectorStore, String, Array[SearchRequest], max_concurrent? : Int) -> Array[Array[ScoredPoint]] raise VectorStoreError
+
+pub async fn batch_write(&VectorStore, String, Array[Point], batch_size~ : Int, max_concurrent? : Int, wait? : Bool) -> Unit raise VectorStoreError
 
 // Errors
 pub(all) suberror VectorStoreError {
