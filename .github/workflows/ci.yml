@@ -1,0 +1,99 @@
+# 持续集成：与 DEVELOPMENT.md 12.2 的 CI 作业设计保持一致。
+#
+# 三个作业：
+#   check        —— fmt / 类型检查 / wasm-gc 编译面 / 公共 API 界面
+#   unit         —— native / js / wasm 三目标测试，含测试计数门限断言（12.1 纪律 3）
+#   integration  —— 拉真实 Qdrant 容器，remote 后端跑一致性套件 C1–C15
+#
+# 关键约束：
+#   - 工具链版本与 async 版本必须成对锁定（11.1 / 12.2）：本文件锁定 moon 0.1.20260920，
+#     与 moon.mod 中 "moonbitlang/async@0.22.1" 配对；换版本前必须先跑全量测试。
+#   - wasm-gc 只保证可编译，async 测试在该目标下静默跳过，故只做 moon check、不跑测试。
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+env:
+  # 与 moon.mod 中 async@0.22.1 成对锁定的工具链版本（见上方注释）
+  MOON_VERSION: 0.1.20260920
+  # 最低测试数门限：防「只看退出码 0 得到假绿」（DEVELOPMENT.md 12.1 纪律 3）
+  MIN_TESTS: 40
+
+jobs:
+  check:
+    name: Check（fmt / 类型检查 / API 界面）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 MoonBit 工具链（固定版本）
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: 提交前必跑：格式检查
+        run: moon fmt --check
+      - name: 类型检查（0 warning）
+        run: moon check
+      - name: wasm-gc 编译面（只保证可编译，不跑测试）
+        run: moon check --target wasm-gc
+      - name: 公共 API 界面检查
+        run: moon info
+
+  unit:
+    name: 单元测试（native / js / wasm）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 MoonBit 工具链（固定版本）
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: 三目标测试 + 计数门限断言
+        run: |
+          set -euo pipefail
+          run_test() {
+            local target="$1" log total
+            log="$(moon test --target "$target" 2>&1)" || { printf '%s\n' "$log"; exit 1; }
+            printf '%s\n' "$log"
+            total="$(printf '%s\n' "$log" | grep -oE '^Total tests: [0-9]+' | grep -oE '[0-9]+$')"
+            if [[ -z "$total" || "$total" -lt "$MIN_TESTS" ]]; then
+              echo "::error::测试计数未达门限: target=$target total=$total gate=$MIN_TESTS"
+              exit 1
+            fi
+          }
+          run_test native
+          run_test js
+          run_test wasm
+
+  integration:
+    name: 集成测试（真实 Qdrant 容器）
+    runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.14.0
+        ports:
+          - 6333:6333
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 MoonBit 工具链（固定版本）
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: 等待 Qdrant 就绪
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
+              echo "qdrant ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "qdrant 未在预期时间内就绪"
+          exit 1
+      - name: remote 后端对真实 Qdrant 跑一致性套件 C1–C15
+        env:
+          QDRANT_URL: http://127.0.0.1:6333
+        run: moon test --target native
