@@ -6,7 +6,7 @@
 
 | 元信息 | 值 |
 | --- | --- |
-| 文档版本 | v1.10 |
+| 文档版本 | v1.11 |
 | 文档日期 | 2026-10-20 |
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
@@ -44,6 +44,7 @@
 | v1.8 | 2026-10-18 | **修正 6.5（M3 实测，后被 v1.9 取代）**：`QdrantStore::new` 曾改为 async——`@http.Client` 构造是 async | — |
 | v1.9 | 2026-10-18 | **M3 完成**：`src/remote` 与 `tests/stub` 落地并 native 全绿（其余目标 remote 被 native-only 排除）；定稿 6.5（`QdrantStore::new` 回同步，改用 `@http.request` 自由函数）、修正 8.2 传输层实现、C14 移除 Unsupported 共享断言、Q4 冲突映射；新增 13.6 实测记录 | — |
 | v1.10 | 2026-10-20 | **M4 完成**：core 新增批次并发门面 `batch_write` / `batch_search`（`@async.all` 有界并发、失败整组取消）；core 由「零运行时依赖」改为正式依赖 async 非 IO 部分（4.2 / 11.2 更新）；新增 6.6 与 13.7 | — |
+| v1.11 | 2026-10-20 | **清理 B8**：共享一致性套件新增 C16（`values_count` / `is_empty` / `geo`），桩补 geo 求值；Q14 定稿；19 节 B8 标记解决 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -918,6 +919,7 @@ pub async fn run_conformance(store : &VectorStore, name_prefix : String) -> Arra
 | C13 | `delete_points` / `delete_by_filter` | 删除后 `retrieve` 为空 / 命中的点消失，未命中的点仍在 |
 | C14 | 错误种类 | 维度不符 → `InvalidArgument`；集合不存在 → `NotFound`；重复建且配置冲突 → `Conflict`；不支持路径 → `Unsupported`（**仅断言语义级错误种类**，不断言本地私有的 `Http` 等分支） |
 | C15 | 距离数值 | 与黄金值在容差内一致（见下） |
+| C16 | `values_count` / `is_empty` / `geo`（矩形、半径） | 命中集合与预期一致（Q14 定稿，B8 解决，2026-10-20） |
 
 **C15 的黄金值来源（v1.4 修正）**：M2 阶段**没有 Docker**（13.2），无法用真实 Qdrant 生成 fixture，因此 M2 使用**解析式手算黄金值**（例如 `a=[1,0]`、`b=[0,1]` 在四种度量下的 score 分别为 `1.0` / `√2` / `0.0` / `2.0`），并**显式声明这不是端到端比对**。M3 必须用真实 Qdrant 对同一批数据重新固化 golden fixture（`tests/integration/` 的 JSON 文件）并替换/补充这组手算值；届时若发现 9.2 的换算表与 Qdrant 实际不符，需回改 9.2 与 README。
 
@@ -1410,7 +1412,7 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 | Q11 | `moon.mod`（新格式）与 `moon.mod.json`（旧格式）最终取舍 | 影响 11.1 | ✅ **已定稿：用新格式 `moon.mod` / `moon.pkg`**——`moon fmt` 会自动完成迁移（M1 实测，见 13.4） | 已定稿 |
 | Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | ✅ **已定稿：硬编码 32MB，不设配置项**。理由：上限只是内存防护不是业务参数，设配置项会让公共 API 膨胀；超限报 `Decode`（8.2）。若未来出现真实需求再提 | M3 |
 | Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
-| Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面。现状：这三类只有 `local` 的白盒测试覆盖，`remote`（M3）拿不到共享断言 → 存在静默漂移的空间（B7） | 待定。倾向：并入 C7 或新增 C16，M3 随 remote 一起做 | M3 |
+| Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面 | ✅ **已定稿：纳入，新增 C16**（2026-10-20，B8 解决）。local 与 remote 桩均实现这三类求值，共享套件对两端跑通 | M3 |
 | Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | 待定。M3 实测 Qdrant 行为后二选一：① 保持 `InvalidArgument` 并在 README 声明；② 改为「从插入序下一个位置继续」并放宽 C12 | M3 |
 | Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6） | 这四条都是本地按「合理推断」定稿的语义，**未经真实 Qdrant 验证**；一旦不符，会同时牵动 9.2/9.6、C6/C7/C9/C15 与 README「已知差异」 | 待 M3 用真实 Qdrant 逐条比对；不符则先改文档再改实现与套件期望 | M3 |
 
@@ -1539,7 +1541,7 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 | B5 | `payload_or_empty` 对「无 payload 的点」每次求值都新建空 `Map` | 批量过滤时的分配抖动（无正确性问题） | 求值入口统一折叠为共享的只读空表 | M4（与 B3 同批） |
 | B6 | `MemoryStore::new()` 未预分配容量，大批量 upsert 会多次 rehash | 性能；本地后端定位是测试与离线，优先级最低 | 增加可选参数 `MemoryStore::new(capacity?)` —— **属公共 API 变更，必须先改 6.5 与 `.mbti` 再实现** | M5（发布前评估收益） |
 | B7 | `search` 对全部候选排序（O(m log m)），且每点分配一个 `Ranked` | 当前规模无感；M4 上并发批量检索后会成为热点 | 视 M4 实测决定是否换 top-k 选择（堆）；换之前先量化收益 | M4（先量后改） |
-| B8 | 一致性套件未覆盖 `geo` / `values_count` / `is_empty` | `remote` 后端对这三类条件没有共享断言，「两后端不漂移」有缺口 | 并入 C7 或新增 C16（与 Q14 联动） | M3 |
+| ~~B8~~ | ~~一致性套件未覆盖 `geo` / `values_count` / `is_empty`~~ | ~~`remote` 后端对这三类条件没有共享断言~~ | ✅ **已解决（2026-10-20）**：新增共享套件 C16 覆盖三类（`conformance/suite.mbt`），桩补 geo 求值；local 与 remote 均通过（Q14 定稿） | 已解决 |
 | B9 | **remote 每次请求自动建连，不复用连接**（M3 实测改用 `@http.request` 自由函数） | 高 QPS 下建连开销明显；`@http.Client` 流式写法在带 body 请求上有 `ReaderClosed` 问题（13.6 问题 1） | 若 M4/M5 需要高吞吐，再研究持单例 Client 的正确写法（先复现 ReaderClosed 根因）；当前对测试与中低频足够 | M5 前评估 |
 | B10 | **批次失败不 fail-fast**（M4 取舍）：`batch_write` / `batch_search` 失败时等全部子任务跑完才统一抛第一个错误，而不是立即取消其余 | G6 原文含「失败可整组取消」；M4 因 task group 错误类型被擦除而选择了「错误精确 + 并发 + 实现最简」 | 若需 fail-fast，改用「子任务不 catch、错误经 `with_task_group` 传导」配合能精确捕获的错误类型方案；或引入自研有界并发调度器。M5 评估收益后再做 | M5 前评估 |
 

@@ -919,6 +919,84 @@ async fn check_c11(
 }
 
 ///|
+/// C16：`values_count` / `is_empty` / `geo`（加入共享套件，B8 解决）。
+/// 断言只依赖 main_points 里**确定存在**的字段：id=1 有 geo(1,1) 与 empty_list;
+/// tags 分布为 id1/2 长2、id3/4/5 长1。
+async fn check_c16(
+  store : &@core.VectorStore,
+  suite : Suite,
+  name : String,
+) -> Unit raise @core.VectorStoreError {
+  // values_count：数组长度计数（9.6：数组取 length）
+  let vc_filter = @core.Filter::new(must=[
+    @core.Clause::from_condition(@core.Condition::values_count("tags", gte=2)),
+  ])
+  suite.expect_filter(
+    "C16",
+    "values_count: tags 长度≥2（九.6 数组计数）",
+    store,
+    name,
+    vc_filter,
+    [1, 2],
+  )
+
+  // is_empty：只有 id=1 有 empty_list（空数组）
+  let ie_filter = @core.Filter::new(must=[
+    @core.Clause::from_condition(@core.Condition::is_empty("empty_list", true)),
+  ])
+  suite.expect_filter(
+    "C16",
+    "is_empty(empty_list,true) 只命中 id=1",
+    store,
+    name,
+    ie_filter,
+    [1],
+  )
+
+  // geo_bounding_box：矩形 [lat 0..2, lon 0..2] 只含 id=1(1,1)
+  let geo_box = @core.Filter::new(must=[
+    @core.Clause::from_condition(
+      @core.Condition::GeoBoundingBox(
+        key="geo",
+        box=@core.GeoBox::new(
+          top_left=@core.GeoPoint::new(lat=2.0, lon=0.0),
+          bottom_right=@core.GeoPoint::new(lat=0.0, lon=2.0),
+        ),
+      ),
+    ),
+  ])
+  suite.expect_filter(
+    "C16",
+    "geo_bounding_box 只含 id=1",
+    store,
+    name,
+    geo_box,
+    [1],
+  )
+
+  // geo_radius：中心(1,1)半径 50m 只含 id=1（其余无 geo 或距离远）
+  let geo_radius = @core.Filter::new(must=[
+    @core.Clause::from_condition(
+      @core.Condition::GeoRadius(
+        key="geo",
+        spec=@core.GeoRadiusSpec::new(
+          center=@core.GeoPoint::new(lat=1.0, lon=1.0),
+          radius=50.0,
+        ),
+      ),
+    ),
+  ])
+  suite.expect_filter(
+    "C16",
+    "geo_radius 中心(1,1)只含 id=1",
+    store,
+    name,
+    geo_radius,
+    [1],
+  )
+}
+
+///|
 /// C12：scroll 分页游标（Q5：只承诺不重不漏）。
 async fn check_c12(
   store : &@core.VectorStore,
@@ -1098,6 +1176,7 @@ pub async fn run_conformance(
   check_c9(store, suite, main)
   check_c10(store, suite, main)
   check_c11(store, suite, main)
+  check_c16(store, suite, main)
   check_c12(store, suite, main)
   check_c14(store, suite, main)
 

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Qdrant 本地 HTTP 桩（DEVELOPMENT.md 12.2 / ADR-12）。
 
 用于在无 Docker 的开发机上验证远端后端（M3），复刻 Qdrant 的响应形状：
@@ -440,7 +440,40 @@ def _clause(c, payload):
             if n is not None and _within_bounds(n, spec):
                 return True
         return False
+    if "geo_bounding_box" in c or "geo_radius" in c:
+        cands = _values_at(payload, key)
+        if not cands:
+            return False
+        for cand in cands:
+            for s in _scalars(cand):
+                gp = s if (isinstance(s, dict) and "lat" in s and "lon" in s) else None
+                if gp is None:
+                    continue
+                geolat = float(gp["lat"]); geolon = float(gp["lon"])
+                if "geo_bounding_box" in c:
+                    bb = c["geo_bounding_box"]
+                    tl = bb["top_left"]; br = bb["bottom_right"]
+                    # 与 local/filter_eval.mbt 一致：br.lat<=lat<=tl.lat, tl.lon<=lon<=br.lon
+                    if br["lat"] <= geolat <= tl["lat"] and tl["lon"] <= geolon <= br["lon"]:
+                        return True
+                else:
+                    r = c["geo_radius"]
+                    ct = r["center"]
+                    if _haversine(float(ct["lat"]), float(ct["lon"]), geolat, geolon) <= r["radius"]:
+                        return True
+        return False
     return True
+
+
+def _haversine(lat1, lon1, lat2, lon2):
+    # 与 local 的 haversine 一致（地球半径 6371000 m）
+    import math
+    to_rad = math.pi / 180.0
+    half_dlat = (lat2 - lat1) * to_rad / 2.0
+    half_dlon = (lon2 - lon1) * to_rad / 2.0
+    a = math.sin(half_dlat) ** 2 + math.cos(lat1 * to_rad) * math.cos(lat2 * to_rad) * math.sin(half_dlon) ** 2
+    a = min(1.0, a)
+    return 2.0 * 6371000.0 * math.atan2(a ** 0.5, (1.0 - a) ** 0.5)
 
 
 def main():
