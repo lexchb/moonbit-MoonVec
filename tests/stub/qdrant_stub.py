@@ -14,7 +14,10 @@
 `next_page_offset` 用与 Qdrant 相同的键名。
 """
 
-import json, os, sys, time
+import json
+import math
+import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # 内存：collection -> {"config":.., "points": {id_str: {"id":..,"vector":..,"payload":..}}}
@@ -467,7 +470,6 @@ def _clause(c, payload):
 
 def _haversine(lat1, lon1, lat2, lon2):
     # 与 local 的 haversine 一致（地球半径 6371000 m）
-    import math
     to_rad = math.pi / 180.0
     half_dlat = (lat2 - lat1) * to_rad / 2.0
     half_dlon = (lon2 - lon1) * to_rad / 2.0
