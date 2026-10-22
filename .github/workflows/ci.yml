@@ -6,8 +6,12 @@
 #   integration  —— 拉真实 Qdrant 容器，remote 后端跑一致性套件 C1–C15
 #
 # 关键约束：
-#   - 工具链版本与 async 版本必须成对锁定（11.1 / 12.2）：本文件锁定 moon 0.1.20260920，
-#     与 moon.mod 中 "moonbitlang/async@0.22.1" 配对；换版本前必须先跑全量测试。
+#   - 工具链版本与 async 版本必须成对锁定（11.1 / 12.2）：本地开发锁定 moon 0.1.20260920，
+#     与 moon.mod 中 "moonbitlang/async@0.22.1" 配对。
+#   - CI 安装 latest：实测 cli.moonbitlang.com 只公开 `latest` / `nightly` 两个键，
+#     任何版本化路径（binaries/0.1.* / cores/core-0.1.*）均 403（2026-10-22 验证）。
+#     故 CI 跟随 nightly，安装后打印 `moon version` 记录实际版本供追溯；
+#     若 nightly 漂移导致构建失败，优先排查工具链与 async 的兼容性（见 DEVELOPMENT.md 11.1）。
 #   - wasm-gc 只保证可编译，async 测试在该目标下静默跳过，故只做 moon check、不跑测试。
 
 name: CI
@@ -18,8 +22,8 @@ on:
   pull_request:
 
 env:
-  # 与 moon.mod 中 async@0.22.1 成对锁定的工具链版本（见上方注释）
-  MOON_VERSION: 0.1.20260920
+  # CDN 无版本化下载，安装 nightly 最新版（见上方注释）；`moon version` 会记录实际版本
+  MOON_VERSION: latest
   # 最低测试数门限：防「只看退出码 0 得到假绿」（DEVELOPMENT.md 12.1 纪律 3）
   MIN_TESTS: 40
 
@@ -33,6 +37,8 @@ jobs:
         run: |
           curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
+          "$HOME/.moon/bin/moon" version --all
       - name: 提交前必跑：格式检查
         run: moon fmt --check
       - name: 类型检查（0 warning）
@@ -51,6 +57,8 @@ jobs:
         run: |
           curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
+          "$HOME/.moon/bin/moon" version --all
       - name: 三目标测试 + 计数门限断言
         run: |
           set -euo pipefail
@@ -82,6 +90,8 @@ jobs:
         run: |
           curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
+          "$HOME/.moon/bin/moon" version --all
       - name: 等待 Qdrant 就绪
         run: |
           for i in $(seq 1 60); do
