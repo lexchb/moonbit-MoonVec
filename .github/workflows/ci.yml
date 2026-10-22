@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 MoonBit 工具链（固定版本）
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: 提交前必跑：格式检查
         run: moon fmt --check
@@ -49,7 +49,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 MoonBit 工具链（固定版本）
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: 三目标测试 + 计数门限断言
         run: |
@@ -80,7 +80,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 安装 MoonBit 工具链（固定版本）
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash "$MOON_VERSION"
+          curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash -s "$MOON_VERSION"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: 等待 Qdrant 就绪
         run: |
