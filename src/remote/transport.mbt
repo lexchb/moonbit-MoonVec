@@ -85,14 +85,20 @@ fn error_message(body : Json, fallback : String) -> String {
 ///|
 /// HTTP 状态码 → 具名错误（8.3 映射表）。`None` 表示成功。
 ///
-/// 400 需要按错误消息细分（Q4 定稿）：真实 Qdrant 对「重复建集合」返回 400 且错误体
-/// 含 `already exists` / `exists`，此时映射 `Conflict`（与本地一致），否则 `InvalidArgument`。
+/// 400 需要按错误消息细分（Q4 定稿）：真实 Qdrant 的错误体用整句描述——
+/// `already exists` → Conflict、`does not exist` / `not found` → NotFound、
+/// 其余 → InvalidArgument（2026-10-22 真实 Qdrant 实测）。
 fn map_status_code(code : Int32, message : String) -> @core.VectorStoreError? {
   match code {
     200 | 201 | 202 => None
     400 =>
-      if message.contains("already exists") || message.contains("exists") {
+      // 真实 Qdrant 的错误体用整句描述：区分「重复建集合」（Conflict）与
+      // 「集合不存在」（NotFound），其余为 InvalidArgument（Q4 定稿，2026-10-22 实测）。
+      if message.contains("already exists") {
         Some(@core.VectorStoreError::Conflict(message~))
+      } else if message.contains("does not exist") ||
+        message.contains("not found") {
+        Some(@core.VectorStoreError::NotFound(resource=message))
       } else {
         Some(@core.VectorStoreError::InvalidArgument(message~))
       }
@@ -107,6 +113,14 @@ fn map_status_code(code : Int32, message : String) -> @core.VectorStoreError? {
         Some(@core.VectorStoreError::Http(status=code, message~))
       }
   }
+}
+
+///|
+/// 从响应文本提取可读错误消息（不依赖合法 JSON）：可解析时取 Qdrant 错误体，
+/// 否则退回整段文本（错误响应的 body 可能为空或非 JSON，不应因此掩盖状态码）。
+fn error_message_from_text(text : String) -> String {
+  let parsed = @json.parse(text) catch { _ => return text }
+  error_message(parsed, text)
 }
 
 ///|
@@ -147,15 +161,17 @@ async fn send_once(
       message="响应体超过 \{max_body_bytes()} 字节上限",
     )
   }
-  let parsed = @json.parse(text) catch {
-    _ =>
-      raise @core.VectorStoreError::Decode(
-        message="响应不是合法 JSON（HTTP \{resp.code}）",
-      )
-  }
-  match map_status_code(resp.code, error_message(parsed, text)) {
+  // 先按状态码映射，再解析 body：错误响应（含空 body / 非 JSON）不能被解析
+  // 失败掩盖成 Decode，否则 404 等错误种类会丢失（C14，2026-10-22 实测）。
+  match map_status_code(resp.code, error_message_from_text(text)) {
     Some(error) => raise error
-    None => parsed
+    None =>
+      @json.parse(text) catch {
+        _ =>
+          raise @core.VectorStoreError::Decode(
+            message="响应不是合法 JSON（HTTP \{resp.code}）",
+          )
+      }
   }
 }
 
