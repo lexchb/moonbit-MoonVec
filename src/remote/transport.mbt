@@ -94,9 +94,12 @@ fn map_status_code(code : Int32, message : String) -> @core.VectorStoreError? {
     400 =>
       // 真实 Qdrant 的错误体用整句描述：区分「重复建集合」（Conflict）与
       // 「集合不存在」（NotFound），其余为 InvalidArgument（Q4 定稿，2026-10-22 实测）。
+      // 「不存在」的措辞覆盖常见变体（does not exist / doesn't exist / not found 等）。
       if message.contains("already exists") {
         Some(@core.VectorStoreError::Conflict(message~))
       } else if message.contains("does not exist") ||
+        message.contains("doesn't exist") ||
+        message.contains("not exist") ||
         message.contains("not found") {
         Some(@core.VectorStoreError::NotFound(resource=message))
       } else {

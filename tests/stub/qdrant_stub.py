@@ -225,11 +225,12 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         score = _dist(vec, pv)
                     if "score_threshold" in body:
+                        # 与 Qdrant 一致：阈值严格比较（恰等于阈值的点被排除，2026-10-22 实测）
                         if metric in ("Euclid", "Manhattan"):
-                            if score > body["score_threshold"]:
+                            if score >= body["score_threshold"]:
                                 continue
                         else:
-                            if score < body["score_threshold"]:
+                            if score <= body["score_threshold"]:
                                 continue
                     hit = {"id": p["id"], "score": score}
                     if body.get("with_payload", True):
@@ -423,15 +424,20 @@ def _clause(c, payload):
     if "is_null" in c:
         expect = c["is_null"]
         cands = _values_at(payload, key)
-        nullish = (not cands) or any(s is None for s in _scalars(cands))
+        if not cands:
+            # 与 Qdrant 对齐（2026-10-22）：缺字段 is_null(true) 不命中、(false) 命中
+            return not expect
+        nullish = any(s is None for s in _scalars(cands))
         return nullish == expect
     if "is_empty" in c:
         expect = c["is_empty"]
         cands = _values_at(payload, key)
         if not cands:
-            return False
+            # 与 Qdrant 对齐：缺字段视为「空」，is_empty(true) 命中
+            return expect
         empty = any((isinstance(s, list) and len(s) == 0) or
-                    (isinstance(s, dict) and len(s) == 0) for s in _scalars(cands))
+                    (isinstance(s, dict) and len(s) == 0) or
+                    (s is None) for s in _scalars(cands))
         return empty == expect
     if "values_count" in c:
         spec = c["values_count"]

@@ -1030,6 +1030,16 @@ async fn check_c14(
     "no-error"
   } catch {
     @core.VectorStoreError::NotFound(_) => "NotFound"
+    // 细分错误种类，便于在真实 Qdrant 上定位映射偏差
+    @core.VectorStoreError::Http(status~, ..) => "Http(\{status})"
+    @core.VectorStoreError::InvalidArgument(_) => "InvalidArgument"
+    @core.VectorStoreError::Decode(_) => "Decode"
+    @core.VectorStoreError::Server(status~, ..) => "Server(\{status})"
+    @core.VectorStoreError::Conflict(_) => "Conflict"
+    @core.VectorStoreError::Auth(_) => "Auth"
+    @core.VectorStoreError::RateLimited(_) => "RateLimited"
+    @core.VectorStoreError::Transport(_) => "Transport"
+    @core.VectorStoreError::Timeout(_) => "Timeout"
     _ => "other"
   }
   suite.expect_eq(
@@ -1046,6 +1056,15 @@ async fn check_c14(
     "no-error"
   } catch {
     @core.VectorStoreError::NotFound(_) => "NotFound"
+    @core.VectorStoreError::Http(status~, ..) => "Http(\{status})"
+    @core.VectorStoreError::InvalidArgument(_) => "InvalidArgument"
+    @core.VectorStoreError::Decode(_) => "Decode"
+    @core.VectorStoreError::Server(status~, ..) => "Server(\{status})"
+    @core.VectorStoreError::Conflict(_) => "Conflict"
+    @core.VectorStoreError::Auth(_) => "Auth"
+    @core.VectorStoreError::RateLimited(_) => "RateLimited"
+    @core.VectorStoreError::Transport(_) => "Transport"
+    @core.VectorStoreError::Timeout(_) => "Timeout"
     _ => "other"
   }
   suite.expect_eq(
