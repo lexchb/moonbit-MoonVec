@@ -89,7 +89,23 @@ pub impl @core.VectorStore for QdrantStore with fn create_collection(
       self.options,
       false,
     ),
-  )
+  ) catch {
+    // 幂等语义（README 特性声明 / Q4 定稿）：真实 Qdrant 对已存在集合一律返回
+    // 400/409「already exists」；同名且配置一致时视为创建成功，不一致才报 Conflict。
+    @core.VectorStoreError::Conflict(_) => {
+      let existing = self.describe_collection(name)
+      if existing.size == config.size &&
+        existing.distance == config.distance &&
+        existing.on_disk == config.on_disk {
+        ()
+      } else {
+        raise @core.VectorStoreError::Conflict(
+          message="collection `\{name}` already exists with a different config",
+        )
+      }
+    }
+    e => raise e
+  }
 }
 
 ///|
