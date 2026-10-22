@@ -1,7 +1,8 @@
 ///| Filter 求值：把 core 的过滤 DSL 应用到内存 payload 上。
 ///
 /// 逐个条件的语义在 DEVELOPMENT.md 9.6 已定稿，本文件只负责实现，**不引入新语义**。
-/// 总原则：取值类条件在路径取不到值时一律不匹配，唯一例外是 `is_null(value=true)`。
+/// 总原则：取值类条件在路径取不到值时一律不匹配；`is_null` / `is_empty` 对缺字段的
+/// 行为与 Qdrant 对齐（2026-10-22 实测）：is_null(false) 与 is_empty(true) 命中缺字段。
 
 ///|
 /// 求值入口。`point_id` 只被 `has_id` 与嵌套 filter 透传使用。
@@ -295,7 +296,8 @@ fn eval_values_count(
 }
 
 ///|
-/// `is_empty`：只看**值本身**是否为空数组/空对象。key 缺失时判不匹配（9.6）。
+/// `is_empty`：与 Qdrant 对齐（2026-10-22 实测）——「空」包含空数组 / 空对象 / null /
+/// **缺字段**；`is_empty(true)` 命中这些，`is_empty(false)` 只命中非空值。
 fn eval_is_empty(
   key : String,
   expect_empty : Bool,
@@ -303,13 +305,14 @@ fn eval_is_empty(
 ) -> Bool raise @core.VectorStoreError {
   let candidates = values_at(key, payload)
   if candidates.length() == 0 {
-    return false
+    return expect_empty
   }
   let mut seen_empty = false
   for candidate in candidates {
     match candidate {
       Array(items) => if items.length() == 0 { seen_empty = true }
       Object(fields) => if fields.length() == 0 { seen_empty = true }
+      Null => seen_empty = true
       _ => ()
     }
   }
@@ -317,15 +320,18 @@ fn eval_is_empty(
 }
 
 ///|
-/// `is_null`：**key 缺失也算命中 `true`** —— 这是「缺失 key 一律不匹配」的唯一例外，
-/// 因为 Qdrant 的 `is_null` 本来就是为了匹配「缺字段 / 空字段」而存在的（9.6）。
+/// `is_null`：与 Qdrant 对齐（2026-10-22 实测）——只作用于「字段存在且值为 null」的点；
+/// 缺字段：`is_null(true)` 不命中、`is_null(false)` 命中（缺字段视为「非 null」）。
 fn eval_is_null(
   key : String,
   expect_null : Bool,
   payload : @core.Payload,
 ) -> Bool raise @core.VectorStoreError {
   let candidates = values_at(key, payload)
-  let mut nullish = candidates.length() == 0
+  if candidates.length() == 0 {
+    return !expect_null
+  }
+  let mut nullish = false
   for candidate in candidates {
     if candidate is Null {
       nullish = true

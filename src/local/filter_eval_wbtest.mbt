@@ -115,24 +115,24 @@ test "缺 key 与空值的分界：except / is_null / is_empty" {
     eval_filter(except_empty, data, id),
   )
 
-  // is_null(true) 是「缺 key 不匹配」的唯一例外
+  // is_null 与 Qdrant 对齐：只匹配显式 null；缺字段 is_null(true) 不命中、false 命中
   let null_missing = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_null("nope", true)),
   ])
   expect(
-    "is_null(true) 应命中缺字段",
-    eval_filter(null_missing, data, id),
+    "is_null(true) 对缺字段应不命中（与 Qdrant 对齐）",
+    eval_filter(null_missing, data, id) == false,
   )
 
   let null_false = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_null("nope", false)),
   ])
   expect(
-    "is_null(false) 对缺字段应不命中",
-    eval_filter(null_false, data, id) == false,
+    "is_null(false) 对缺字段应命中（与 Qdrant 对齐）",
+    eval_filter(null_false, data, id),
   )
 
-  // is_empty 只看值本身：空数组命中，缺 key 不命中
+  // is_empty 与 Qdrant 对齐：空数组命中，缺字段也算「空」
   let empty_true = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_empty("empty_list", true)),
   ])
@@ -142,8 +142,8 @@ test "缺 key 与空值的分界：except / is_null / is_empty" {
     @core.Clause::from_condition(@core.Condition::is_empty("nope", true)),
   ])
   expect(
-    "is_empty(true) 对缺 key 应不命中",
-    eval_filter(empty_on_missing, data, id) == false,
+    "is_empty(true) 对缺 key 应命中（与 Qdrant 对齐）",
+    eval_filter(empty_on_missing, data, id),
   )
 
   let empty_false = @core.Filter::new(must=[

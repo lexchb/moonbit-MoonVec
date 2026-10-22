@@ -641,7 +641,7 @@ async fn check_c5(
 }
 
 ///|
-/// C6：score_threshold（Q7：保留 `score <= threshold` 的点，取等号也算）。
+/// C6：score_threshold（与 Qdrant 对齐：仅保留 `score < threshold` 的点，2026-10-22 实测）。
 async fn check_c6(
   store : &@core.VectorStore,
   suite : Suite,
@@ -662,9 +662,9 @@ async fn check_c6(
   }
   suite.expect_ids(
     "C6",
-    "阈值 1.0 应保留距离 0 与 1.0 的点（等号包含）",
+    "阈值 1.0 仅保留距离 < 1.0 的点（与 Qdrant 对齐，等号排除）",
     ids,
-    [1, 5],
+    [1],
   )
 }
 
@@ -861,7 +861,8 @@ async fn check_c10(
 }
 
 ///|
-/// C11：缺失 key。取值类条件一律不匹配；`is_null(true)` 是唯一例外（9.6）。
+/// C11：缺失 key。取值类条件一律不匹配；is_null / is_empty 对缺字段的行为与 Qdrant
+/// 对齐（2026-10-22 实测）：is_null(true) 不命中缺字段、is_null(false) 命中。
 async fn check_c11(
   store : &@core.VectorStore,
   suite : Suite,
@@ -893,28 +894,30 @@ async fn check_c11(
     [1, 2, 3, 5],
   )
 
+  // Qdrant 的 is_null 只匹配显式 null；套件数据无 null 值 → true 分支空
   let is_null_true = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_null("title", true)),
   ])
   suite.expect_filter(
     "C11",
-    "is_null(title,true) 命中缺字段的点（唯一例外）",
+    "is_null(title,true) 只匹配显式 null（缺字段不命中）",
     store,
     name,
     is_null_true,
-    [4],
+    [],
   )
 
+  // is_null(false) 匹配非 null；缺字段视为非 null（与 Qdrant 一致）
   let is_null_false = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_null("title", false)),
   ])
   suite.expect_filter(
     "C11",
-    "is_null(title,false) 取反",
+    "is_null(title,false) 匹配非 null（含缺字段）",
     store,
     name,
     is_null_false,
-    [1, 2, 3, 5],
+    [1, 2, 3, 4, 5],
   )
 }
 
@@ -940,17 +943,17 @@ async fn check_c16(
     [1, 2],
   )
 
-  // is_empty：只有 id=1 有 empty_list（空数组）
+  // is_empty：与 Qdrant 对齐——缺字段也算「空」，故除 id=1（空数组）外全部命中
   let ie_filter = @core.Filter::new(must=[
     @core.Clause::from_condition(@core.Condition::is_empty("empty_list", true)),
   ])
   suite.expect_filter(
     "C16",
-    "is_empty(empty_list,true) 只命中 id=1",
+    "is_empty(empty_list,true) 命中空数组与缺字段（与 Qdrant 对齐）",
     store,
     name,
     ie_filter,
-    [1],
+    [1, 2, 3, 4, 5],
   )
 
   // geo_bounding_box：矩形 [lat 0..2, lon 0..2] 只含 id=1(1,1)

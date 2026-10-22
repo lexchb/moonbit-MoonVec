@@ -351,8 +351,8 @@ pub impl @core.VectorStore for MemoryStore with fn search(self, collection, req)
       break
     }
     if req.score_threshold is Some(threshold) {
-      if item.score > threshold {
-        continue // Q7：保留 score <= threshold 的点
+      if item.score >= threshold {
+        continue // 与 Qdrant 对齐（2026-10-22 实测）：仅保留 score < threshold 的点
       }
     }
     out.push(
