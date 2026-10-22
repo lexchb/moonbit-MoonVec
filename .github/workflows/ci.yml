@@ -39,6 +39,8 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
           "$HOME/.moon/bin/moon" version --all
+          # 建立 mooncakes 注册表索引（全新环境必须；否则 moon check/test 无法解析 moon.mod 依赖）
+          "$HOME/.moon/bin/moon" update
       - name: 提交前必跑：格式检查
         run: moon fmt --check
       - name: 类型检查（0 warning）
@@ -59,6 +61,8 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
           "$HOME/.moon/bin/moon" version --all
+          # 建立 mooncakes 注册表索引（全新环境必须；否则 moon check/test 无法解析 moon.mod 依赖）
+          "$HOME/.moon/bin/moon" update
       - name: 三目标测试 + 计数门限断言
         run: |
           set -euo pipefail
@@ -92,6 +96,8 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           # 记录实际工具链版本（nightly 会漂移，供失败时追溯）
           "$HOME/.moon/bin/moon" version --all
+          # 建立 mooncakes 注册表索引（全新环境必须；否则 moon check/test 无法解析 moon.mod 依赖）
+          "$HOME/.moon/bin/moon" update
       - name: 等待 Qdrant 就绪
         run: |
           for i in $(seq 1 60); do
