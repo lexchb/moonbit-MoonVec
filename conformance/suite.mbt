@@ -115,7 +115,7 @@ fn join_keys(keys : Array[String]) -> String {
 }
 
 ///|
-fn ids_of_numbers(numbers : Array[Int]) -> Array[@core.PointId] {
+fn ids_of_numbers(numbers : Array[Int32]) -> Array[@core.PointId] {
   let out : Array[@core.PointId] = []
   for number in numbers {
     out.push(@core.PointId::of_int(number.to_uint64()))
@@ -130,7 +130,7 @@ fn Suite::expect_ids(
   scenario : String,
   what : String,
   actual : Array[@core.PointId],
-  expected : Array[Int],
+  expected : Array[Int32],
 ) -> Unit {
   let actual_keys = join_keys(id_set(actual))
   let expected_keys = join_keys(id_set(ids_of_numbers(expected)))
@@ -166,7 +166,7 @@ fn Suite::expect_unique_count(
   scenario : String,
   what : String,
   ids : Array[@core.PointId],
-  expected : Int,
+  expected : Int32,
 ) -> Unit {
   let keys = id_set(ids)
   if keys.length() != expected {
@@ -192,7 +192,7 @@ fn Suite::expect_unique_count(
 async fn scroll_all(
   store : &@core.VectorStore,
   name : String,
-  page_size : Int,
+  page_size : Int32,
 ) -> Array[@core.PointId] raise @core.VectorStoreError {
   let out : Array[@core.PointId] = []
   let mut offset : @core.PointId? = None
@@ -251,7 +251,7 @@ async fn Suite::expect_filter(
   store : &@core.VectorStore,
   name : String,
   filter : @core.Filter,
-  expected : Array[Int],
+  expected : Array[Int32],
 ) -> Unit raise @core.VectorStoreError {
   let actual = search_ids(store, name, filter)
   self.expect_ids(scenario, what, actual, expected)

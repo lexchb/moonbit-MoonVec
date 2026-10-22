@@ -8,7 +8,7 @@
 
 ///|
 /// 造一批维度 2、id 从 `start` 起的点（payload 带索引）。
-fn points_from(start : Int, count : Int) -> Array[@core.Point] {
+fn points_from(start : Int32, count : Int32) -> Array[@core.Point] {
   let out : Array[@core.Point] = []
   for i = 0; i < count; i = i + 1 {
     out.push(
@@ -48,7 +48,7 @@ async test "batch_write: 并发批量写入 120 点分 3 批，条数与去重�
   let ids = all_ids(store, "c")
   inspect(ids.length(), content="120")
   // 无重复
-  let keys : Array[Int] = []
+  let keys : Array[Int32] = []
   for id in ids {
     match id {
       @core.Num(n) => keys.push(n.to_int())

@@ -6,7 +6,7 @@
 priv struct MemCollection {
   config : @core.VectorConfig
   points : Array[@core.Point]
-  index : Map[@core.PointId, Int]
+  index : Map[@core.PointId, Int32]
 }
 
 ///|
@@ -112,7 +112,7 @@ priv struct Ranked {
 }
 
 ///|
-fn compare_double(a : Double, b : Double) -> Int {
+fn compare_double(a : Double, b : Double) -> Int32 {
   if a < b {
     -1
   } else if a > b {
@@ -125,7 +125,7 @@ fn compare_double(a : Double, b : Double) -> Int {
 ///|
 /// ID 的确定性次序：数字在前（按数值升序），UUID 在后（按字典序）。
 /// 仅在分数相同、需要打破并列时使用（9.3），使本地后端的结果完全可复现。
-fn compare_point_id(a : @core.PointId, b : @core.PointId) -> Int {
+fn compare_point_id(a : @core.PointId, b : @core.PointId) -> Int32 {
   match (a, b) {
     (@core.Num(x), @core.Num(y)) =>
       if x < y {
@@ -142,7 +142,7 @@ fn compare_point_id(a : @core.PointId, b : @core.PointId) -> Int {
 }
 
 ///|
-fn compare_ranked(a : Ranked, b : Ranked) -> Int {
+fn compare_ranked(a : Ranked, b : Ranked) -> Int32 {
   let by_score = compare_double(a.score, b.score)
   if by_score != 0 {
     by_score

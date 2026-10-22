@@ -87,7 +87,7 @@ priv struct QdrantParamsJson {
 /// 只取我们用得到的三个字段；Qdrant 实际的 `vectors` 可能是对象（多向量）或数组，
 /// 本项目只支持单向量配置，遇到不匹配的形状在转换层报 `Decode`。
 priv struct QdrantVectorsJson {
-  size : Int
+  size : Int32
   distance : String
   on_disk : Bool?
 } derive(@json.FromJson)

@@ -12,12 +12,12 @@
 pub(all) struct TransportOptions {
   base_url : String
   api_key : String?
-  timeout_ms : Int
-  max_retry : Int
-  retry_initial_ms : Int
+  timeout_ms : Int32
+  max_retry : Int32
+  retry_initial_ms : Int32
   retry_factor : Double
-  retry_max_ms : Int
-  max_concurrency : Int
+  retry_max_ms : Int32
+  max_concurrency : Int32
 }
 
 ///|
@@ -26,12 +26,12 @@ pub(all) struct TransportOptions {
 pub fn TransportOptions::new(
   base_url~ : String,
   api_key~ : String?,
-  timeout_ms? : Int = 5000,
-  max_retry? : Int = 3,
-  retry_initial_ms? : Int = 20,
-  retry_factor? : Double = 2.0,
-  retry_max_ms? : Int = 1000,
-  max_concurrency? : Int = 4,
+  timeout_ms~ : Int32 = 5000,
+  max_retry~ : Int32 = 3,
+  retry_initial_ms~ : Int32 = 20,
+  retry_factor~ : Double = 2.0,
+  retry_max_ms~ : Int32 = 1000,
+  max_concurrency~ : Int32 = 4,
 ) -> TransportOptions {
   {
     base_url,
@@ -52,7 +52,7 @@ pub fn TransportOptions::default() -> TransportOptions {
 
 ///|
 /// 响应体上限（Q12 定稿，硬编码）：超过视为异常响应，报 `Decode`。
-fn max_body_bytes() -> Int {
+fn max_body_bytes() -> Int32 {
   32 * 1024 * 1024
 }
 
@@ -87,7 +87,7 @@ fn error_message(body : Json, fallback : String) -> String {
 ///
 /// 400 需要按错误消息细分（Q4 定稿）：真实 Qdrant 对「重复建集合」返回 400 且错误体
 /// 含 `already exists` / `exists`，此时映射 `Conflict`（与本地一致），否则 `InvalidArgument`。
-fn map_status_code(code : Int, message : String) -> @core.VectorStoreError? {
+fn map_status_code(code : Int32, message : String) -> @core.VectorStoreError? {
   match code {
     200 | 201 | 202 => None
     400 =>
@@ -161,7 +161,7 @@ async fn send_once(
 
 ///|
 /// 指数退避（带初始值、倍数与上限）。
-fn backoff_ms(attempt : Int, options : TransportOptions) -> Int {
+fn backoff_ms(attempt : Int32, options : TransportOptions) -> Int32 {
   let mut ms = options.retry_initial_ms
   let mut i = 1
   while i < attempt {

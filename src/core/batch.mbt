@@ -13,7 +13,7 @@
 
 ///|
 /// 把数组按 `size` 切成子数组（最后一个子数组可能不足 size）。仅供本文件。
-fn[T] chunk(xs : Array[T], size : Int) -> Array[Array[T]] {
+fn[T] chunk(xs : Array[T], size : Int32) -> Array[Array[T]] {
   let out : Array[Array[T]] = []
   let mut i = 0
   while i < xs.length() {
@@ -42,9 +42,9 @@ pub async fn batch_write(
   store : &VectorStore,
   collection : String,
   points : Array[Point],
-  batch_size~ : Int,
-  max_concurrent? : Int = 4,
-  wait? : Bool = true,
+  batch_size~ : Int32,
+  max_concurrent~ : Int32 = 4,
+  wait~ : Bool = true,
 ) -> Unit raise VectorStoreError {
   if batch_size < 1 {
     raise VectorStoreError::InvalidArgument(
@@ -84,7 +84,7 @@ pub async fn batch_search(
   store : &VectorStore,
   collection : String,
   requests : Array[SearchRequest],
-  max_concurrent? : Int = 4,
+  max_concurrent~ : Int32 = 4,
 ) -> Array[Array[ScoredPoint]] raise VectorStoreError {
   if max_concurrent < 1 {
     raise VectorStoreError::InvalidArgument(

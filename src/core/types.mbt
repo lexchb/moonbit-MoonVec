@@ -29,16 +29,16 @@ pub fn PointId::of_uuid(s : String) -> PointId {
 ///|
 /// 集合的向量配置。
 pub(all) struct VectorConfig {
-  size : Int
+  size : Int32
   distance : Distance
   on_disk : Bool
 } derive(Eq)
 
 ///|
 pub fn VectorConfig::new(
-  size~ : Int,
+  size~ : Int32,
   distance~ : Distance,
-  on_disk? : Bool = false,
+  on_disk~ : Bool = false,
 ) -> VectorConfig {
   { size, distance, on_disk, }
 }
@@ -121,7 +121,7 @@ pub(all) enum UpsertResult {
 pub(all) struct SearchRequest {
   vector : Vector
   filter : Filter?
-  limit : Int
+  limit : Int32
   score_threshold : Double?
   with_payload : Bool
   with_vector : Bool
@@ -130,11 +130,11 @@ pub(all) struct SearchRequest {
 ///|
 pub fn SearchRequest::new(
   vector~ : Vector,
-  limit~ : Int,
+  limit~ : Int32,
   filter? : Filter,
   score_threshold? : Double,
-  with_payload? : Bool = true,
-  with_vector? : Bool = false,
+  with_payload~ : Bool = true,
+  with_vector~ : Bool = false,
 ) -> SearchRequest {
   { vector, filter, limit, score_threshold, with_payload, with_vector, }
 }
@@ -143,7 +143,7 @@ pub fn SearchRequest::new(
 /// 分页遍历请求。不承诺全局顺序，只承诺「不重不漏」（DEVELOPMENT.md Q5）。
 pub(all) struct ScrollRequest {
   filter : Filter?
-  limit : Int
+  limit : Int32
   offset : PointId?
   with_payload : Bool
   with_vector : Bool
@@ -151,11 +151,11 @@ pub(all) struct ScrollRequest {
 
 ///|
 pub fn ScrollRequest::new(
-  limit~ : Int,
+  limit~ : Int32,
   filter? : Filter,
   offset? : PointId,
-  with_payload? : Bool = true,
-  with_vector? : Bool = false,
+  with_payload~ : Bool = true,
+  with_vector~ : Bool = false,
 ) -> ScrollRequest {
   { filter, limit, offset, with_payload, with_vector, }
 }

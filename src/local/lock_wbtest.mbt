@@ -13,7 +13,7 @@
 /// 探针：一个带锁的计数器。用 `priv struct` 以便同时验证「priv 成员可从白盒测试访问」。
 priv struct LockedBox {
   lock : @async.Mutex
-  mut value : Int
+  mut value : Int32
 }
 
 ///|

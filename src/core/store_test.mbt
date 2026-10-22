@@ -136,7 +136,7 @@ pub extend EchoStore with @core.VectorStore::{
 async fn[T : @core.VectorStore] run_via_generic(
   store : T,
   name : String,
-) -> Int raise @core.VectorStoreError {
+) -> Int32 raise @core.VectorStoreError {
   store.create_collection(
     name,
     @core.VectorConfig::new(size=4, distance=@core.Cosine),

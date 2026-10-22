@@ -133,18 +133,18 @@ pub fn GeoRadiusSpec::new(
 ///|
 /// 数组元素个数范围。四条边界同为 None 时会被省略。
 pub(all) struct ValuesCountSpec {
-  gt : Int?
-  gte : Int?
-  lt : Int?
-  lte : Int?
+  gt : Int32?
+  gte : Int32?
+  lt : Int32?
+  lte : Int32?
 } derive(Eq, ToJson, @json.FromJson)
 
 ///|
 pub fn ValuesCountSpec::new(
-  gt? : Int,
-  gte? : Int,
-  lt? : Int,
-  lte? : Int,
+  gt? : Int32,
+  gte? : Int32,
+  lt? : Int32,
+  lte? : Int32,
 ) -> ValuesCountSpec {
   { gt, gte, lt, lte, }
 }
@@ -161,7 +161,7 @@ pub fn Condition::match_str(key : String, value : String) -> Condition {
 }
 
 ///|
-pub fn Condition::match_int(key : String, value : Int) -> Condition {
+pub fn Condition::match_int(key : String, value : Int32) -> Condition {
   Match(key~, value=MatchValue::Value(Json::number(value.to_double())))
 }
 
@@ -222,10 +222,10 @@ pub fn Condition::is_null(key : String, value : Bool) -> Condition {
 ///|
 pub fn Condition::values_count(
   key : String,
-  gt? : Int,
-  gte? : Int,
-  lt? : Int,
-  lte? : Int,
+  gt? : Int32,
+  gte? : Int32,
+  lt? : Int32,
+  lte? : Int32,
 ) -> Condition {
   ValuesCount(key~, spec=ValuesCountSpec::new(gt?, gte?, lt?, lte?))
 }
