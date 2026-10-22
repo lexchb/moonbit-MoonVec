@@ -45,6 +45,7 @@
 | v1.9 | 2026-10-18 | **M3 完成**：`src/remote` 与 `tests/stub` 落地并 native 全绿（其余目标 remote 被 native-only 排除）；定稿 6.5（`QdrantStore::new` 回同步，改用 `@http.request` 自由函数）、修正 8.2 传输层实现、C14 移除 Unsupported 共享断言、Q4 冲突映射；新增 13.6 实测记录 | — |
 | v1.10 | 2026-10-20 | **M4 完成**：core 新增批次并发门面 `batch_write` / `batch_search`（`@async.all` 有界并发、失败整组取消）；core 由「零运行时依赖」改为正式依赖 async 非 IO 部分（4.2 / 11.2 更新）；新增 6.6 与 13.7 | — |
 | v1.11 | 2026-10-20 | **清理 B8**：共享一致性套件新增 C16（`values_count` / `is_empty` / `geo`），桩补 geo 求值；Q14 定稿；19 节 B8 标记解决 | — |
+| v1.12 | 2026-10-22 | **M3 真实 Qdrant 复核（CI）**：CI 上线（check/unit/integration 三作业）；本地工具链升级 0.1.20260920 → 0.1.20261021（语法迁移 Int→Int32、`?`→`~`）；实测校准三处语义——C6 阈值改严格 `score < threshold`（Q7 回改）、C11/C16 的 `is_null` / `is_empty` 缺字段行为对齐 Qdrant、C14 的 400「does not exist」映射 NotFound 与状态码先于响应体解析；Q16 校准清单更新 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -594,7 +595,7 @@ test "filter json roundtrip" {
 `local/filter_eval.mbt` 需把同一套 Filter 应用于 `Map[String, Json]`。语义与 Qdrant 对齐的部分：
 
 - `must`：全部为真才通过；`should`：至少一个为真（若 `should` 非空，则**恒定**要求至少一个为真，即使 `must` 非空）；`must_not`：全部为假才通过。
-- 缺失 key 的条件一律判定为 **不匹配**（与 Qdrant 一致）——**唯一例外见 9.6 的 `is_null(value=true)`**。
+- 缺失 key 的取值类条件判定为 **不匹配**；`is_null` / `is_empty` 对缺字段的行为与 Qdrant 对齐（2026-10-22 真实 Qdrant 实测）：`is_null(true)` 不命中缺字段、`is_null(false)` 命中（缺字段视为「非 null」）；`is_empty(true)` 命中缺字段（视为「空」）。
 
 **路径语义的范围限定（明确划线）**：
 
@@ -603,7 +604,7 @@ test "filter json roundtrip" {
 - 不支持：`[0]` 之类的显式下标、通配符、空段（`a..b`、前后点号）。遇到不支持形式返回 `VectorStoreError::Unsupported`，**不得静默返回不匹配**。
 - 该差异必须在共享 README 的「已知差异」小节中公开，避免用户误判。
 
-> 逐个 Condition 的完整求值规则（含数组元素语义、geo 是否实现、`is_empty` / `is_null` 的缺失 key 例外）在 **9.6** 定稿；本节只声明路径语义的边界。
+> 逐个 Condition 的完整求值规则（含数组元素语义、geo 是否实现、`is_empty` / `is_null` 的缺字段行为）在 **9.6** 定稿；本节只声明路径语义的边界。
 
 ---
 
@@ -800,7 +801,7 @@ pub(all) struct MemoryStore {
 4. **先过滤再算距离**（filter 存在时）；filter 的路径形式非法 → `Unsupported`；
 5. 对候选点算距离，按 `score` 升序排序；**分数相同时按 `PointId` 升序**（本地保证确定性；远端不承诺该次序，故一致性测试不得依赖它）；
 6. 截断 `limit`；
-7. 应用 `score_threshold`：**保留 `score <= threshold` 的点**（Q7 定稿）；
+7. 应用 `score_threshold`：**保留 `score < threshold` 的点**（Q7 定稿，2026-10-22 真实 Qdrant 校准为严格比较）；
 8. 按 `with_payload` / `with_vector` 填充字段。
 
 字段填充规则（两个后端必须一致）：
@@ -856,7 +857,7 @@ pub(all) struct MemoryStore {
 
 ### 9.6 过滤求值细则（本地）
 
-`eval_filter(f, payload, point_id)` 的规则。**总原则：取值类条件在 key 缺失时一律不匹配**（7.4），唯一例外是 `is_null(value=true)`。
+`eval_filter(f, payload, point_id)` 的规则。**总原则：取值类条件在 key 缺失时一律不匹配**（7.4）；`is_null` / `is_empty` 的缺字段行为与 Qdrant 对齐（2026-10-22 真实 Qdrant 实测校准）。
 
 | 条件 | 本地求值规则 |
 | --- | --- |
@@ -869,8 +870,8 @@ pub(all) struct MemoryStore {
 | `GeoBoundingBox` | 值为 `{lat, lon}` 对象，且 `bottom_right.lat ≤ lat ≤ top_left.lat`、`top_left.lon ≤ lon ≤ bottom_right.lon`；数组任一元素满足即可 |
 | `GeoRadius` | haversine 距离 ≤ `radius`（**radius 单位为米**，与 Qdrant 一致，见 README）；数组任一元素满足即可 |
 | `ValuesCount` | 值必须是数组（取 `length`）或对象（取键数）；标量 → 不匹配；再按边界比较 |
-| `IsEmpty(value=true)` | key **存在**且值为空数组或空对象 → 命中；**key 缺失 → 不命中**。`value=false` 时取相反的判定 |
-| `IsNull(value=true)` | **key 缺失 或 值为 `null` → 命中**（这是「缺失 key 不匹配」的唯一例外，Qdrant 的 `is_null` 就用于匹配缺字段/空字段） |
+| `IsEmpty(value=true)` | 空数组 / 空对象 / `null` / **缺字段** → 命中（缺字段视为「空」，与 Qdrant 一致）；`value=false` 时只命中非空值 |
+| `IsNull(value=true)` | 字段存在且值为 `null` → 命中；**缺字段不命中**（与 Qdrant 一致）。`value=false` 命中「非 null」（缺字段视为非 null） |
 | `HasId(ids)` | `point_id ∈ ids`（不看 payload，因此路径语义与它无关） |
 | `Nested(key, filter)` | key 的值必须是数组，其**任一对象元素**满足内层 filter（内层 filter 以该元素为 payload 求值） |
 
@@ -909,12 +910,12 @@ pub async fn run_conformance(store : &VectorStore, name_prefix : String) -> Arra
 | C3 | upsert 覆盖同 ID | 只保留最新值；`retrieve` 得到的 payload / vector 是新值；条数不增 |
 | C4 | 批量 upsert | 返回 `All`；最终条数 = 写入的去重后条数 |
 | C5 | 检索 top-k | 只比较 **score 单调不减** + 命中集合（**不断言并列次序**，见 9.3）；`limit` 精确生效（条数 = min(limit, 命中数)） |
-| C6 | `score_threshold` | 结果中每个点都满足 `score <= threshold`；且与不加阈值时的前段一致 |
+| C6 | `score_threshold` | 结果中每个点都满足 `score < threshold`（2026-10-22 真实 Qdrant 校准：恰等于阈值的点被排除）；且与不加阈值时的前段一致 |
 | C7 | filter：`must` / `should` / `must_not` | 命中 ID 集合与预期完全相等（三种子句各一组用例；`should` 采用 9.6 的「非空即恒定要求 ≥1」语义） |
 | C8 | filter：嵌套 Filter（`Clause::Group`） | 同上；另含一层 `must` 内嵌 `must_not` 的组合 |
 | C9 | filter：`match` 的 `value` / `any` / `except` / `text` | 同上；样本只用「分词与子串结果一致」的文本，避开 9.6 的近似差异 |
 | C10 | filter：`range` 的 `gt` / `gte` / `lt` / `lte` 及组合 | 同上；边界值恰好等于阈值时按 `>=` / `>` 区分 |
-| C11 | filter：缺失 key | 取值类条件判「不匹配」；**`is_null(value=true)` 反向命中**（9.6 的唯一例外） |
+| C11 | filter：缺失 key | 取值类条件判「不匹配」；`is_null(false)` 与 `is_empty(true)` 命中缺字段（2026-10-22 真实 Qdrant 校准） |
 | C12 | `scroll` 分页游标 | 用小 `limit` 反复翻页直到 `next_offset == None`；合并结果与原集合**相等且无重复**（Q5：不承诺顺序） |
 | C13 | `delete_points` / `delete_by_filter` | 删除后 `retrieve` 为空 / 命中的点消失，未命中的点仍在 |
 | C14 | 错误种类 | 维度不符 → `InvalidArgument`；集合不存在 → `NotFound`；重复建且配置冲突 → `Conflict`；不支持路径 → `Unsupported`（**仅断言语义级错误种类**，不断言本地私有的 `Http` 等分支） |
@@ -1405,7 +1406,7 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 | Q4 | 重复 `create_collection` 的语义 | 影响 C2 断言 | ✅ **已定稿：配置一致则幂等成功；配置不一致报 `Conflict`**。⚠ 真实 Qdrant 对已存在集合的 create 返回 400 且错误体含 `already exists`；8.3 的 400 映射需按消息细分（含 exists 类关键字 → `Conflict`，否则 `InvalidArgument`）。**桩用 409 表达冲突**，与本地一致（M3 实测，见 13.6） | M1 |
 | Q5 | `scroll` 的排序依据 | 影响 C12 断言与本地后端实现 | ✅ **已定稿：不承诺全局顺序**——只承诺「分页遍历不重不漏」；本地按插入序实现，远端按 Qdrant 返回序。C12 断言只比对集合相等且无重复 | M1 |
 | Q6 | Cosine 遇零向量的约定：报错还是返回固定分？ | 影响 C15 数值对齐 | ✅ **已定稿：任一侧模长为 0 时把 `cos` 记作 0，本库 `score` 固定 1.0**（既不抛错也不产生 `NaN`，见 9.2 / ADR-15）。C15 黄金值排除零向量，M3 用真实 Qdrant 复核 | M2 |
-| Q7 | `score_threshold` 的比较方向 | 影响 C6 断言 | ✅ **已定稿（本库内部约定）：统一「越小越近」，保留 `score <= threshold` 的点**。⚠ 注意 Qdrant 的阈值方向随度量类型而变，M3 必须用真实 Qdrant 校准并在 README 声明 | M1 |
+| Q7 | `score_threshold` 的比较方向 | 影响 C6 断言 | ✅ **已定稿并经真实 Qdrant 校准（2026-10-22）：统一「越小越近」，保留 `score < threshold` 的点（严格比较，恰等于阈值的点被排除）**。初始定稿为 `<=`，M3 实测 Qdrant 排除等值点后回改（见 13.7） | M1 / M3 校准 |
 | Q8 | 是否提供强类型 payload 映射（如泛型 `PayloadOf[T]`） | 影响 API 复杂度 | ❌ **M2 决议：不做（关闭）**。主线保持 `Map[String, Json]`（Q3）；申报书未承诺该能力，不影响验收。若 M4/M5 出现真实需求，另开新问题而不是回填本条 | M2 |
 | Q9 | 远端后端是否支持 serverless/cloud 端点（HTTPS + api-key） | 影响传输层默认配置 | ✅ **已定稿：支持**。`base_url` 已可含 `https://`；`api_key` 放入 `api-key` 请求头（M0 已实测自定义头正确透传）。serverless 端点的额外限制（如 tls 校验）留待 CI 真实验证 | M3 |
 | Q10 | `@async.Mutex` 在 `js` / `wasm` 下是否可用（决定 9.4 的最终形态） | 影响本地后端并发承诺 | ✅ **已定稿：可用**，native/js/wasm 均验证通过（13.3） | 已定稿 |
@@ -1414,7 +1415,7 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 | Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
 | Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面 | ✅ **已定稿：纳入，新增 C16**（2026-10-20，B8 解决）。local 与 remote 桩均实现这三类求值，共享套件对两端跑通 | M3 |
 | Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | 待定。M3 实测 Qdrant 行为后二选一：① 保持 `InvalidArgument` 并在 README 声明；② 改为「从插入序下一个位置继续」并放宽 C12 | M3 |
-| Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6） | 这四条都是本地按「合理推断」定稿的语义，**未经真实 Qdrant 验证**；一旦不符，会同时牵动 9.2/9.6、C6/C7/C9/C15 与 README「已知差异」 | 待 M3 用真实 Qdrant 逐条比对；不符则先改文档再改实现与套件期望 | M3 |
+| Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6）、`score_threshold` 边界（Q7）、`is_null` / `is_empty` 缺字段行为（9.6） | 本地按「合理推断」定稿的语义，需用真实 Qdrant 逐条比对 | ⏳ **进行中（2026-10-22）**：C6 阈值边界、C11/C16 缺字段行为、C14 错误种类已实测校准并回改；`score` 换算、`should`、`text`、`values_count` 待 CI 复核 | M3 |
 
 > 每条定稿后，把结论并入正文并在「变更记录」留痕；`|` 不允许长期悬挂超过一个里程碑。
 
