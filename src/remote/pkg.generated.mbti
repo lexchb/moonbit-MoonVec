@@ -30,15 +30,15 @@ pub impl @core.VectorStore for QdrantStore
 pub(all) struct TransportOptions {
   base_url : String
   api_key : String?
-  timeout_ms : Int
-  max_retry : Int
-  retry_initial_ms : Int
+  timeout_ms : Int32
+  max_retry : Int32
+  retry_initial_ms : Int32
   retry_factor : Double
-  retry_max_ms : Int
-  max_concurrency : Int
+  retry_max_ms : Int32
+  max_concurrency : Int32
 }
 pub fn TransportOptions::default() -> Self
-pub fn TransportOptions::new(base_url~ : String, api_key~ : String?, timeout_ms? : Int, max_retry? : Int, retry_initial_ms? : Int, retry_factor? : Double, retry_max_ms? : Int, max_concurrency? : Int) -> Self
+pub fn TransportOptions::new(base_url~ : String, api_key~ : String?, timeout_ms? : Int32, max_retry? : Int32, retry_initial_ms? : Int32, retry_factor? : Double, retry_max_ms? : Int32, max_concurrency? : Int32) -> Self
 
 // Type aliases
 

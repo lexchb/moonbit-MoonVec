@@ -6,21 +6,21 @@ import {
 }
 
 // Values
-pub async fn batch_search(&VectorStore, String, Array[SearchRequest], max_concurrent? : Int) -> Array[Array[ScoredPoint]] raise VectorStoreError
+pub async fn batch_search(&VectorStore, String, Array[SearchRequest], max_concurrent? : Int32) -> Array[Array[ScoredPoint]] raise VectorStoreError
 
-pub async fn batch_write(&VectorStore, String, Array[Point], batch_size~ : Int, max_concurrent? : Int, wait? : Bool) -> Unit raise VectorStoreError
+pub async fn batch_write(&VectorStore, String, Array[Point], batch_size~ : Int32, max_concurrent? : Int32, wait? : Bool) -> Unit raise VectorStoreError
 
 // Errors
 pub(all) suberror VectorStoreError {
-  Timeout(timeout_ms~ : Int)
+  Timeout(timeout_ms~ : Int32)
   Transport(message~ : String)
-  Http(status~ : Int, message~ : String)
-  Server(status~ : Int, message~ : String)
+  Http(status~ : Int32, message~ : String)
+  Server(status~ : Int32, message~ : String)
   Decode(message~ : String)
   NotFound(resource~ : String)
   Conflict(message~ : String)
   Auth(message~ : String)
-  RateLimited(retry_after_ms~ : Int?)
+  RateLimited(retry_after_ms~ : Int32?)
   InvalidArgument(message~ : String)
   Unsupported(feature~ : String)
 }
@@ -61,7 +61,7 @@ pub fn Condition::is_null(String, Bool) -> Self
 pub fn Condition::match_any(String, Array[String]) -> Self
 pub fn Condition::match_bool(String, Bool) -> Self
 pub fn Condition::match_except(String, Array[String]) -> Self
-pub fn Condition::match_int(String, Int) -> Self
+pub fn Condition::match_int(String, Int32) -> Self
 pub fn Condition::match_str(String, String) -> Self
 pub fn Condition::match_text(String, String) -> Self
 pub fn Condition::match_value(String, Json) -> Self
@@ -69,7 +69,7 @@ pub fn Condition::nested(String, Filter) -> Self
 pub fn Condition::not_equal(Self, Self) -> Bool
 pub fn Condition::range(String, gt? : Double, gte? : Double, lt? : Double, lte? : Double) -> Self
 pub fn Condition::to_json(Self) -> Json
-pub fn Condition::values_count(String, gt? : Int, gte? : Int, lt? : Int, lte? : Int) -> Self
+pub fn Condition::values_count(String, gt? : Int32, gte? : Int32, lt? : Int32, lte? : Int32) -> Self
 pub impl ToJson for Condition
 pub impl @json.FromJson for Condition
 
@@ -172,7 +172,7 @@ pub(all) enum PointId {
 } derive(Eq, Hash)
 pub fn PointId::equal(Self, Self) -> Bool
 pub fn PointId::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn PointId::hash(Self) -> Int
+pub fn PointId::hash(Self) -> Int32
 pub fn PointId::hash_combine(Self, Hasher) -> Unit
 pub fn PointId::not_equal(Self, Self) -> Bool
 pub fn PointId::of_int(UInt64) -> Self
@@ -212,25 +212,25 @@ pub fn ScrollPage::not_equal(Self, Self) -> Bool
 
 pub(all) struct ScrollRequest {
   filter : Filter?
-  limit : Int
+  limit : Int32
   offset : PointId?
   with_payload : Bool
   with_vector : Bool
 } derive(Eq)
 pub fn ScrollRequest::equal(Self, Self) -> Bool
-pub fn ScrollRequest::new(limit~ : Int, filter? : Filter, offset? : PointId, with_payload? : Bool, with_vector? : Bool) -> Self
+pub fn ScrollRequest::new(limit~ : Int32, filter? : Filter, offset? : PointId, with_payload? : Bool, with_vector? : Bool) -> Self
 pub fn ScrollRequest::not_equal(Self, Self) -> Bool
 
 pub(all) struct SearchRequest {
   vector : Array[Double]
   filter : Filter?
-  limit : Int
+  limit : Int32
   score_threshold : Double?
   with_payload : Bool
   with_vector : Bool
 } derive(Eq)
 pub fn SearchRequest::equal(Self, Self) -> Bool
-pub fn SearchRequest::new(vector~ : Array[Double], limit~ : Int, filter? : Filter, score_threshold? : Double, with_payload? : Bool, with_vector? : Bool) -> Self
+pub fn SearchRequest::new(vector~ : Array[Double], limit~ : Int32, filter? : Filter, score_threshold? : Double, with_payload? : Bool, with_vector? : Bool) -> Self
 pub fn SearchRequest::not_equal(Self, Self) -> Bool
 
 pub(all) struct StoredPoint {
@@ -250,24 +250,24 @@ pub fn UpsertResult::equal(Self, Self) -> Bool
 pub fn UpsertResult::not_equal(Self, Self) -> Bool
 
 pub(all) struct ValuesCountSpec {
-  gt : Int?
-  gte : Int?
-  lt : Int?
-  lte : Int?
+  gt : Int32?
+  gte : Int32?
+  lt : Int32?
+  lte : Int32?
 } derive(Eq, ToJson, @json.FromJson)
 pub fn ValuesCountSpec::equal(Self, Self) -> Bool
 pub fn ValuesCountSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ValuesCountSpec::new(gt? : Int, gte? : Int, lt? : Int, lte? : Int) -> Self
+pub fn ValuesCountSpec::new(gt? : Int32, gte? : Int32, lt? : Int32, lte? : Int32) -> Self
 pub fn ValuesCountSpec::not_equal(Self, Self) -> Bool
 pub fn ValuesCountSpec::to_json(Self) -> Json
 
 pub(all) struct VectorConfig {
-  size : Int
+  size : Int32
   distance : Distance
   on_disk : Bool
 } derive(Eq)
 pub fn VectorConfig::equal(Self, Self) -> Bool
-pub fn VectorConfig::new(size~ : Int, distance~ : Distance, on_disk? : Bool) -> Self
+pub fn VectorConfig::new(size~ : Int32, distance~ : Distance, on_disk? : Bool) -> Self
 pub fn VectorConfig::not_equal(Self, Self) -> Bool
 
 // Type aliases
