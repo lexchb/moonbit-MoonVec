@@ -1038,7 +1038,7 @@ async fn check_c14(
     @core.VectorStoreError::Conflict(_) => "Conflict"
     @core.VectorStoreError::Auth(_) => "Auth"
     @core.VectorStoreError::RateLimited(_) => "RateLimited"
-    @core.VectorStoreError::Transport(_) => "Transport"
+    @core.VectorStoreError::Transport(message~) => "Transport:\{message}"
     @core.VectorStoreError::Timeout(_) => "Timeout"
     _ => "other"
   }
@@ -1063,7 +1063,7 @@ async fn check_c14(
     @core.VectorStoreError::Conflict(_) => "Conflict"
     @core.VectorStoreError::Auth(_) => "Auth"
     @core.VectorStoreError::RateLimited(_) => "RateLimited"
-    @core.VectorStoreError::Transport(_) => "Transport"
+    @core.VectorStoreError::Transport(message~) => "Transport:\{message}"
     @core.VectorStoreError::Timeout(_) => "Timeout"
     _ => "other"
   }
