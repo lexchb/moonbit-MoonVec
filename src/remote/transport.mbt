@@ -58,6 +58,11 @@ fn max_body_bytes() -> Int32 {
 
 ///|
 /// 请求头：仅当配置了 api-key 时放入 `api-key` 头（Q9 定稿）。
+/// 固定发送 `Accept-Encoding: identity`：@http 默认会发 `gzip,identity` 并启用自动解压，
+/// 而 Qdrant 的错误响应（404 等）body 未压缩/为空，inflate 会失败并抛
+/// `InvalidBlock("empty huffman tree")`（2026-10-24 CI 实测，C14）。显式 identity
+/// 让 @http 关闭自动解压（send_request 检测到 Accept-Encoding 即不启用），
+/// 两端走明文，状态码/错误体才能被正常读取。
 fn headers_of(
   options : TransportOptions,
 ) -> Map[@http.CaseInsensitiveString, String] {
@@ -65,6 +70,7 @@ fn headers_of(
   if options.api_key is Some(key) {
     headers.set(@http.CaseInsensitiveString("api-key"), key)
   }
+  headers.set(@http.CaseInsensitiveString("Accept-Encoding"), "identity")
   headers
 }
 

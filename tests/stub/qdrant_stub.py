@@ -35,7 +35,12 @@ def _metric_to_name(d):
 def _collection_or_404(handler, name):
     col = COLLECTIONS.get(name)
     if col is None:
-        handler._send(404, {"status": {"error": f"Collection `{name}` doesn't exist!"}, "time": time.time(), "result": None})
+        # 模拟真实 Qdrant：请求 Accept-Encoding 含 gzip 时，错误响应声明
+        # Content-Encoding: gzip 但 body 未压缩（Qdrant 错误路径不压缩）。
+        # @http 若启用自动解压会对明文 inflate → InvalidBlock("empty huffman tree")。
+        ae = handler.headers.get("Accept-Encoding", "")
+        declared = "gzip" in ae
+        handler._send(404, {"status": {"error": f"Collection `{name}` doesn't exist!"}, "time": time.time(), "result": None}, gzip_declared=declared)
         return None
     return col
 
@@ -46,10 +51,12 @@ class Handler(BaseHTTPRequestHandler):
     # ReaderClosed）。用 HTTP/1.1 更贴近真实端，也让客户端读写行为与真实 Qdrant 一致。
     protocol_version = "HTTP/1.1"
 
-    def _send(self, code, payload):
+    def _send(self, code, payload, gzip_declared=False):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        if gzip_declared:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
