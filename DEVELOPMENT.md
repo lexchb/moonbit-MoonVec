@@ -13,7 +13,7 @@
 | 许可证 | Apache-2.0 |
 | 已验证工具链 | `moon 0.1.20260920` / `moonc 0.10.14` + `moonbitlang/async 0.22.1`（详见 13.2） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
-| 当前进度 | M0–M3 已完成（M2 见 13.5、M3 见 13.6；native 44/44，js/wasm 各 43/43）；**M4 批量与并发进行中（见 6.6 / 13.7）** |
+| 当前进度 | M0–M4 已完成（M4 见 13.7：native 49/49，js/wasm 各 48/48；v1.12 已完成 M3 真实 Qdrant 复核与 CI 上线）；**M5 发布进行中（见 13.8）** |
 
 > 包路径勘误（v1.4）：MoonBit 的包名是「模块名 + 目录路径」，因此 `src/core` 的真实包名是
 > **`lexchb/moon_vector/src/core`**（而不是 v1.3 里写的 `lexchb/moon_vector/core`）。
@@ -46,6 +46,7 @@
 | v1.10 | 2026-10-20 | **M4 完成**：core 新增批次并发门面 `batch_write` / `batch_search`（`@async.all` 有界并发、失败整组取消）；core 由「零运行时依赖」改为正式依赖 async 非 IO 部分（4.2 / 11.2 更新）；新增 6.6 与 13.7 | — |
 | v1.11 | 2026-10-20 | **清理 B8**：共享一致性套件新增 C16（`values_count` / `is_empty` / `geo`），桩补 geo 求值；Q14 定稿；19 节 B8 标记解决 | — |
 | v1.12 | 2026-10-22 | **M3 真实 Qdrant 复核（CI）**：CI 上线（check/unit/integration 三作业）；本地工具链升级 0.1.20260920 → 0.1.20261021（语法迁移 Int→Int32、`?`→`~`）；实测校准三处语义——C6 阈值改严格 `score < threshold`（Q7 回改）、C11/C16 的 `is_null` / `is_empty` 缺字段行为对齐 Qdrant、C14 的 400「does not exist」映射 NotFound 与状态码先于响应体解析；Q16 校准清单更新 | — |
+| v1.13 | 2026-10-25 | **M5 启动**：新增可运行示例 `examples/local_demo`（本地后端，无需 Docker，`moon run examples/local_demo` 一键跑通，native 0 warning）；13.1 最终验收清单勾选示例项；13.8 新增 M5 实测记录 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -1100,11 +1101,11 @@ jobs:
 - [ ] `lexchb/moon_vector` 可通过 `moon add` 引入
 - [ ] 发布到 mooncakes.io 且版本号为 SemVer
 - [ ] README 含：快速开始、API 概览、已知差异、并发说明、最低 Qdrant 版本、API 规范来源声明
-- [ ] 至少一个可运行示例（local 后端，无需 Docker）
+- [x] 至少一个可运行示例（local 后端，无需 Docker）—— `examples/local_demo`，`moon run examples/local_demo` 一键跑通（13.8）
 - [ ] 单元测试 + 一致性测试 + 集成测试（Docker 优先，本地桩兜底）
 - [ ] GitHub Actions 覆盖 `moon check` / `moon test` / 集成测试，且工具链与 `async` 版本成对锁定
-- [ ] Apache-2.0 `LICENSE` 存在
-- [ ] 仓库 ≥10 个有效 commit
+- [x] Apache-2.0 `LICENSE` 存在
+- [x] 仓库 ≥10 个有效 commit
 
 ### 13.2 M0 验证记录（2026-10-14，已完成）
 
@@ -1366,6 +1367,34 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 
 **M4 明确推迟的取舍**：批次失败时**不 fail-fast**（不中断其余并发子任务），而是在全部跑完后统一上抛第一个错误。这是为「错误精确 + 并发 + 实现最简」的取舍；「失败立即取消其余」登记为 M5 优化（见 19 节 B10）。
 
+### 13.8 M5 实测记录（2026-10-25，进行中）
+
+**产出**（已入库）：
+
+```
+examples/local_demo/moon.pkg   # executable 包，依赖 core + local + async
+examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批量写→过滤删除 全流程
+```
+
+**验收结果**：
+
+| 项 | 结果 |
+| --- | --- |
+| `moon run examples/local_demo`（native） | 一键跑通，0 error / 0 warning；输出符合预期（过滤命中 2 条、批量写 120 条、过滤删除后剩余 122 条） |
+| 与 README「快速开始」一致 | 是，示例即 README 代码的完整可运行版，另加 M4 `batch_write` 演示 |
+| 是否依赖 Docker / 外部服务 | 否（本地 `MemoryStore`，符合 M5 DoD） |
+
+**编写示例时的实测发现**（记入 16.1）：
+
+| # | 发现 | 说明 |
+| --- | --- | --- |
+| 1 | `examples` 作为 executable 包需 `pkgtype(kind: "executable")` 且依赖 `moonbitlang/async` | `async fn main` 依赖 async 运行时；不写 `pkgtype` 会报找不到 `main` 入口 |
+| 2 | 示例包中 `Json` 不必显式 import `moonbitlang/core/json` | core 的公共 API（`Payload`/`Filter` 编解码）已带出 `Json` 类型，显式 import 会触发 `unused_package` 告警；与 local 测试同例 |
+| 3 | 字符串插值内嵌 `match` 会解析失败（`Parse error, unexpected token`） | 先在外部求值再插值（`let result_text = match ..`） |
+| 4 | `PointId` / `UpsertResult` 无 `Show` | 示例须手写 `id_text` / 模式匹配转文本；`\{hit.id}` 直接插值编译失败（记入 16.1 已有条目的现实印证） |
+
+**M5 剩余项**（见 13.1 清单）：README 待补示例入口与测试计数同步、`mooncakes` 发布、CI 复核；发布需要 mooncakes 凭证（本机 `~/.moon/credentials.json` 缺失，需登录后 `moon publish`）。
+
 ---
 
 ## 14. 关键设计决策记录（ADR）
@@ -1474,6 +1503,9 @@ src/local/batch_test.mbt        # 黑盒：并发写/覆盖/并发搜/失败传�
 | 400 状态码 | 消息含 `exists` → `Conflict`，否则 `InvalidArgument`（Q4 定稿） | Qdrant 对重复建集合返回 400（非 409） |
 | 可选参数在函数体 | `max_concurrent? : Int = 4` 体内是 **`Int` 不是 `Option`**；校验用 `if x < 1`，传给另一可选参数用 `name=x` | 不能 `is Some(n)` 判断；`?` 转发（`f(x?)`）对带默认值的参数不可用 |
 | task group 子任务错误 | 子任务 `catch` 自身错误、返回 `(结果, Error?)`，外层扫描后 `raise` | `@async.all` / `with_task_group` / `spawn_bg` 会把子任务错误**擦除为抽象 `Error`**，无法与 `raise SpecificError` 精确匹配（M4 实测，同 M0 的 `@async.retry` 坑） |
+| 字符串插值内嵌 `match` | 先在外部求值再插值（`let x = match ..` 后 `"\{x}"`） | `"\{match .. }"` 直接内嵌会 `Parse error, unexpected token`（M5 实测，examples/local_demo） |
+| executable 包入口 | `moon.pkg` 写 `pkgtype(kind: "executable")`，`async fn main` 依赖 `moonbitlang/async` | 不写 `pkgtype` 报找不到 `main` 入口（M5 实测，13.8） |
+| 显式 import 传递可见的包 | 不 import 也能用的包名不要写进 `moon.pkg` | core 公共 API 已带出 `Json`，示例再显式 import `moonbitlang/core/json` 触发 `unused_package` 告警（M5 实测，13.8） |
 
 > **一条方法论**：MoonBit 的**解析错误会级联**成一大批看似无关的类型错误（M2 实例：`impl ... with async fn` 解析失败后，编译器在另一处报 `There is no record definition with the fields: points, next_offset`，而那个字面量完全正确）。遇到「类型错误难以理解」时，**先确认前面没有解析错误**，否则会照着错误信息往完全错误的方向改。
 

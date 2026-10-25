@@ -1,0 +1,7 @@
+import {
+  "lexchb/moon_vector/src/core",
+  "lexchb/moon_vector/src/local",
+  "moonbitlang/async",
+}
+
+pkgtype(kind: "executable")
