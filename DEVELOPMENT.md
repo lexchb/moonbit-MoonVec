@@ -48,6 +48,7 @@
 | v1.12 | 2026-10-22 | **M3 真实 Qdrant 复核（CI）**：CI 上线（check/unit/integration 三作业）；本地工具链升级 0.1.20260920 → 0.1.20261021（语法迁移 Int→Int32、`?`→`~`）；实测校准三处语义——C6 阈值改严格 `score < threshold`（Q7 回改）、C11/C16 的 `is_null` / `is_empty` 缺字段行为对齐 Qdrant、C14 的 400「does not exist」映射 NotFound 与状态码先于响应体解析；Q16 校准清单更新 | — |
 | v1.13 | 2026-10-25 | **M5 启动**：新增可运行示例 `examples/local_demo`（本地后端，无需 Docker，`moon run examples/local_demo` 一键跑通，native 0 warning）；13.1 最终验收清单勾选示例项；13.8 新增 M5 实测记录 | — |
 | v1.14 | 2026-10-25 | **M5 推进（风险审计后续）**：① Q16 闭环——CI integration 对真实 Qdrant v1.14.0 跑全套 C1–C16 两次全绿，score 换算/should/text/values_count 全部实测核验；② Q15 定稿——依 Qdrant 官方文档（软删除位图、offset 按 id 续扫不报错）定稿为选项①（保持 `InvalidArgument` + README 已知差异声明），本地物理删除对齐需 tombstone 成本过高；③ 修 B1——`delete_points`/`delete_by_filter` 从逐个 remove+reindex（O(k·n)）降为一次扫描保留数组+单次重建（O(n)），19.1 与 17 节风险表状态同步；④ 13.8 补 CI 事故记录（wasm-gc `run_async_main` 缺失） | — |
+| v1.15 | 2026-10-25 | **Q15 实测（方案 A）**：新增 remote 专项用例「Q15 实测——offset 指向已删除点的续扫行为」，桩与真实 Qdrant 均返回 `3,4,`（续扫不报错），README 第 7 条声明与实测一致；`tests/stub/qdrant_stub.py` 的 scroll 修正为「按 id 排序 + offset 续扫」（原插入序 + offset 找不到重扫会重复返回，与 Qdrant 语义不符）；native 测试 49→50 | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -1399,6 +1400,8 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 
 **Q15 / Q16 定稿（2026-10-25，风险审计后续）**：Q16 经 CI integration 对真实 Qdrant 跑全套 C1–C16 两次全绿后闭环（score 换算 / should / text / values_count 全部实测核验）；Q15 依 Qdrant 官方文档定稿为选项①（scroll 的 offset 按 id 续扫、软删除位图不报错；本地物理删除 + 插入序无法低成本对齐，保留 `InvalidArgument` 并在 README 已知差异声明）。
 
+**Q15 实测（方案 A，2026-10-25）**：新增 remote 专项用例「Q15 实测——offset 指向已删除点的续扫行为」（qdrant_test.mbt），桩与真实 Qdrant 均返回 `3,4,`（删除 offset 指向的点后从 id 3 续扫，不报错）。为此将 `tests/stub/qdrant_stub.py` 的 scroll 从「插入序 + offset 找不到重扫（会重复）」修正为「**按 id 排序 + offset 续扫**」，忠实 Qdrant 官方语义（sorted by id、Start ID）。native 测试 49→50。
+
 ---
 
 ## 14. 关键设计决策记录（ADR）
@@ -1447,7 +1450,7 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | ✅ **已定稿：硬编码 32MB，不设配置项**。理由：上限只是内存防护不是业务参数，设配置项会让公共 API 膨胀；超限报 `Decode`（8.2）。若未来出现真实需求再提 | M3 |
 | Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
 | Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面 | ✅ **已定稿：纳入，新增 C16**（2026-10-20，B8 解决）。local 与 remote 桩均实现这三类求值，共享套件对两端跑通 | M3 |
-| Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | ✅ **已定稿：选项①——保持 `InvalidArgument` 并在 README 声明**。Qdrant 官方文档确认 scroll 的 `offset` 是「Start ID」，删除为软删除位图，游标按 id 续扫**不报错**；本地为物理删除 + 插入序（9.3），无法从已删点之后定位「下一个插入位置」，对齐需引入 tombstone/软删除（成本高、收益低）。故本地保留报错、README「已知差异」声明 | M3 |
+| Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | ✅ **已定稿：选项①——保持 `InvalidArgument` 并在 README 声明**。Qdrant 官方文档确认 scroll 的 `offset` 是「Start ID」，删除为软删除位图，游标按 id 续扫**不报错**；本地为物理删除 + 插入序（9.3），无法从已删点之后定位「下一个插入位置」，对齐需引入 tombstone/软删除（成本高、收益低）。故本地保留报错、README「已知差异」声明。**实测确认（2026-10-25，方案 A）**：新增 remote 专项用例「Q15 实测——offset 指向已删除点的续扫行为」，桩与 CI 真实 Qdrant 均返回 `3,4,`（续扫不报错），README 第 7 条声明与实测一致 | M3 |
 | Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6）、`score_threshold` 边界（Q7）、`is_null` / `is_empty` 缺字段行为（9.6） | 本地按「合理推断」定稿的语义，需用真实 Qdrant 逐条比对 | ✅ **已闭环（2026-10-25）**：CI integration 作业对真实 Qdrant v1.14.0 跑全套 C1–C16（含 C7 `should`、C9 `text`、C15 四度量 `score` 换算、C16 `values_count`/`is_empty`/`geo`），两次运行全绿；C6 阈值、C11/C16 缺字段、C14 错误种类此前已实测校准。校准清单全部核验完毕 | M3 |
 
 > 每条定稿后，把结论并入正文并在「变更记录」留痕；`|` 不允许长期悬挂超过一个里程碑。

@@ -251,14 +251,25 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if sub == ["scroll"]:
                 ids = list(col["points"].keys())
-                # 插入序：points dict 保持写入顺序（Python 3.7+），filter 后仍需保持
-                filtered = [i for i in ids if _matches(body.get("filter", {}), col["points"][i]) or not body.get("filter")]
+                # Qdrant 语义：scroll 按 id 排序（官方文档 "all resulting points are
+                # sorted by {id}"），offset 是 Start ID。数字 id 按数值比较，uuid 按字符串。
+                def _id_key(i):
+                    return int(i) if i.isdigit() else i
+                filtered = sorted(
+                    [i for i in ids if _matches(body.get("filter", {}), col["points"][i]) or not body.get("filter")],
+                    key=_id_key,
+                )
                 start = 0
                 if "offset" in body:
-                    off = str(body["offset"])
+                    off = _id_key(str(body["offset"]))
+                    # offset 指向已删/不存在点：软删除位图语义下不报错，
+                    # 从「id 大于 offset 的第一个存活点」继续（Q15 实测依据）。
                     for j, i in enumerate(filtered):
-                        if i == off:
+                        if _id_key(i) == off:
                             start = j + 1
+                            break
+                        if _id_key(i) > off:
+                            start = j
                             break
                 limit = body.get("limit", 10)
                 page_ids = filtered[start:start + limit]
