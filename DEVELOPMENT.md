@@ -1402,6 +1402,8 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 
 **Q15 实测（方案 A，2026-10-25）**：新增 remote 专项用例「Q15 实测——offset 指向已删除点的续扫行为」（qdrant_test.mbt），桩与真实 Qdrant 均返回 `3,4,`（删除 offset 指向的点后从 id 3 续扫，不报错）。为此将 `tests/stub/qdrant_stub.py` 的 scroll 从「插入序 + offset 找不到重扫（会重复）」修正为「**按 id 排序 + offset 续扫**」，忠实 Qdrant 官方语义（sorted by id、Start ID）。native 测试 49→50。
 
+**M5 CI 事故记录（2026-10-25，格式检查）**：提交 Q15 专项用例后 CI Check 作业的 `moon fmt --check` 失败——新增 .mbt 后未先跑 `moon fmt` 直接提交，CI 用 nightly 工具链格式化后与仓库版本 diff（5 处排版差异：`ignore(create_collection)` 拆多行、`defer` 去大括号、`scroll` 调用拆行、`&&` 条件拆行、`fail` 参数拆行）。教训：**任何 .mbt 增改后必须先 `moon fmt` 再提交**（与 11.1「工具链成对锁定」互补——本次格式规则两端一致，非版本漂移）。
+
 ---
 
 ## 14. 关键设计决策记录（ADR）
