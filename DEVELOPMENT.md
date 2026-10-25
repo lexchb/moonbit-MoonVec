@@ -1505,7 +1505,7 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | 可选参数在函数体 | `max_concurrent? : Int = 4` 体内是 **`Int` 不是 `Option`**；校验用 `if x < 1`，传给另一可选参数用 `name=x` | 不能 `is Some(n)` 判断；`?` 转发（`f(x?)`）对带默认值的参数不可用 |
 | task group 子任务错误 | 子任务 `catch` 自身错误、返回 `(结果, Error?)`，外层扫描后 `raise` | `@async.all` / `with_task_group` / `spawn_bg` 会把子任务错误**擦除为抽象 `Error`**，无法与 `raise SpecificError` 精确匹配（M4 实测，同 M0 的 `@async.retry` 坑） |
 | 字符串插值内嵌 `match` | 先在外部求值再插值（`let x = match ..` 后 `"\{x}"`） | `"\{match .. }"` 直接内嵌会 `Parse error, unexpected token`（M5 实测，examples/local_demo） |
-| executable 包入口 | `moon.pkg` 写 `pkgtype(kind: "executable")`，`async fn main` 依赖 `moonbitlang/async` | 不写 `pkgtype` 报找不到 `main` 入口（M5 实测，13.8） |
+| executable 包入口 | `moon.pkg` 写 `pkgtype(kind: "executable")`，`async fn main` 依赖 `moonbitlang/async`，并**显式 `supported_targets = "+native"`** | 不写 `pkgtype` 报找不到 `main` 入口；不写 `supported_targets` 时 `moon check --target wasm-gc` 报 `[4021] run_async_main not found`（async 的 `run_async_main` 只有 native/js cfg，无 wasm 版本）（M5 实测，13.8 #1/#2） |
 | 显式 import 传递可见的包 | 不 import 也能用的包名不要写进 `moon.pkg` | core 公共 API 已带出 `Json`，示例再显式 import `moonbitlang/core/json` 触发 `unused_package` 告警（M5 实测，13.8） |
 
 > **一条方法论**：MoonBit 的**解析错误会级联**成一大批看似无关的类型错误（M2 实例：`impl ... with async fn` 解析失败后，编译器在另一处报 `There is no record definition with the fields: points, next_offset`，而那个字面量完全正确）。遇到「类型错误难以理解」时，**先确认前面没有解析错误**，否则会照着错误信息往完全错误的方向改。
