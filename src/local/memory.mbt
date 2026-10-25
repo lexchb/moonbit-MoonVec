@@ -257,12 +257,24 @@ pub impl @core.VectorStore for MemoryStore with fn delete_points(
   defer self.lock.release()
   let target = self.collections.get(collection)
   guard target is Some(stored) else { raise collection_not_found(collection) }
+  // B1：删除从「逐个 remove + reindex（O(k·n)）」降为「一次扫描保留数组 + 单次重建（O(n)）」。
+  // 用 Map 作 O(1) 成员集合；不存在的 id 静默跳过（与 Qdrant 一致，9.3）。
+  let doomed : Map[@core.PointId, Bool] = Map([])
   for id in ids {
-    if stored.index.get(id) is Some(index) {
-      ignore(stored.points.remove(index))
-      stored.reindex()
+    doomed.set(id, true)
+  }
+  let kept : Array[@core.Point] = []
+  for point in stored.points {
+    if doomed.contains(point.id) == false {
+      kept.push(point)
     }
   }
+  // 复用原数组对象（避免 mut 字段，风格同 reindex 注释）；保持插入序。
+  stored.points.clear()
+  for point in kept {
+    stored.points.push(point)
+  }
+  stored.reindex()
 }
 
 ///|
@@ -277,18 +289,25 @@ pub impl @core.VectorStore for MemoryStore with fn delete_by_filter(
   guard target is Some(stored) else { raise collection_not_found(collection) }
   // 两阶段：先在纯计算阶段求出「要删哪些 ID」，再统一删除。
   // 这样即使过滤求值中途抛 Unsupported，也不会留下「删了一半」的集合。
-  let doomed : Array[@core.PointId] = []
+  // B1：删除降为单次扫描 + 单次重建（O(n)），不再逐个 remove + reindex。
+  let doomed : Map[@core.PointId, Bool] = Map([])
   for point in stored.points {
     if eval_filter(filter, payload_or_empty(point), point.id) {
-      doomed.push(point.id)
+      doomed.set(point.id, true)
     }
   }
-  for id in doomed {
-    if stored.index.get(id) is Some(index) {
-      ignore(stored.points.remove(index))
-      stored.reindex()
+  let kept : Array[@core.Point] = []
+  for point in stored.points {
+    if doomed.contains(point.id) == false {
+      kept.push(point)
     }
   }
+  // 复用原数组对象（避免 mut 字段，风格同 reindex 注释）；保持插入序。
+  stored.points.clear()
+  for point in kept {
+    stored.points.push(point)
+  }
+  stored.reindex()
 }
 
 ///|

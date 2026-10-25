@@ -47,6 +47,7 @@
 | v1.11 | 2026-10-20 | **清理 B8**：共享一致性套件新增 C16（`values_count` / `is_empty` / `geo`），桩补 geo 求值；Q14 定稿；19 节 B8 标记解决 | — |
 | v1.12 | 2026-10-22 | **M3 真实 Qdrant 复核（CI）**：CI 上线（check/unit/integration 三作业）；本地工具链升级 0.1.20260920 → 0.1.20261021（语法迁移 Int→Int32、`?`→`~`）；实测校准三处语义——C6 阈值改严格 `score < threshold`（Q7 回改）、C11/C16 的 `is_null` / `is_empty` 缺字段行为对齐 Qdrant、C14 的 400「does not exist」映射 NotFound 与状态码先于响应体解析；Q16 校准清单更新 | — |
 | v1.13 | 2026-10-25 | **M5 启动**：新增可运行示例 `examples/local_demo`（本地后端，无需 Docker，`moon run examples/local_demo` 一键跑通，native 0 warning）；13.1 最终验收清单勾选示例项；13.8 新增 M5 实测记录 | — |
+| v1.14 | 2026-10-25 | **M5 推进（风险审计后续）**：① Q16 闭环——CI integration 对真实 Qdrant v1.14.0 跑全套 C1–C16 两次全绿，score 换算/should/text/values_count 全部实测核验；② Q15 定稿——依 Qdrant 官方文档（软删除位图、offset 按 id 续扫不报错）定稿为选项①（保持 `InvalidArgument` + README 已知差异声明），本地物理删除对齐需 tombstone 成本过高；③ 修 B1——`delete_points`/`delete_by_filter` 从逐个 remove+reindex（O(k·n)）降为一次扫描保留数组+单次重建（O(n)），19.1 与 17 节风险表状态同步；④ 13.8 补 CI 事故记录（wasm-gc `run_async_main` 缺失） | — |
 
 > **M0 已验证的关键结论（一句话）**：trait 可以声明 `async fn`；JSON 手写编解码可行且 struct 的 `Option` 字段由 `derive` 自动省略；`@http` 在 native 下连通、超时与显式重试均可行，但**库自带 `@async.retry` 会把错误类型擦除为抽象 `Error`**，故重试改为显式循环。
 
@@ -1396,6 +1397,8 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 
 **M5 剩余项**（见 13.1 清单）：README 待补示例入口与测试计数同步、`mooncakes` 发布、CI 复核；发布需要 mooncakes 凭证（本机 `~/.moon/credentials.json` 缺失，需登录后 `moon publish`）。
 
+**Q15 / Q16 定稿（2026-10-25，风险审计后续）**：Q16 经 CI integration 对真实 Qdrant 跑全套 C1–C16 两次全绿后闭环（score 换算 / should / text / values_count 全部实测核验）；Q15 依 Qdrant 官方文档定稿为选项①（scroll 的 offset 按 id 续扫、软删除位图不报错；本地物理删除 + 插入序无法低成本对齐，保留 `InvalidArgument` 并在 README 已知差异声明）。
+
 ---
 
 ## 14. 关键设计决策记录（ADR）
@@ -1444,8 +1447,8 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | Q12 | 是否需要「响应体大小上限」配置项，默认值取多少 | 影响 8.2 | ✅ **已定稿：硬编码 32MB，不设配置项**。理由：上限只是内存防护不是业务参数，设配置项会让公共 API 膨胀；超限报 `Decode`（8.2）。若未来出现真实需求再提 | M3 |
 | Q13 | 申报书的模块名与仓库链接需回写（`moonbit-community` → `lexchb`） | 影响发布路径一致性 | ✅ **已定稿并回写**：[PROPOSAL.md](file:///d:/Moonbit/moonbit-Qdrant/PROPOSAL.md) 已按实际完成情况重写（2026-10-18，见 13.3） | M1 前 |
 | Q14 | `geo` / `values_count` / `is_empty` 是否纳入**共享**一致性套件 | 决定「两后端不漂移」的覆盖面 | ✅ **已定稿：纳入，新增 C16**（2026-10-20，B8 解决）。local 与 remote 桩均实现这三类求值，共享套件对两端跑通 | M3 |
-| Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | 待定。M3 实测 Qdrant 行为后二选一：① 保持 `InvalidArgument` 并在 README 声明；② 改为「从插入序下一个位置继续」并放宽 C12 | M3 |
-| Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6）、`score_threshold` 边界（Q7）、`is_null` / `is_empty` 缺字段行为（9.6） | 本地按「合理推断」定稿的语义，需用真实 Qdrant 逐条比对 | ⏳ **进行中（2026-10-22）**：C6 阈值边界、C11/C16 缺字段行为、C14 错误种类已实测校准并回改；`score` 换算、`should`、`text`、`values_count` 待 CI 复核 | M3 |
+| Q15 | `scroll` 的 `offset` 指向**已被删除**的点时，两后端语义如何统一 | 本地现在报 `InvalidArgument`（9.3），Qdrant 未实测；若不一致，「翻页中途删除」这一真实场景会让两后端行为分叉 | ✅ **已定稿：选项①——保持 `InvalidArgument` 并在 README 声明**。Qdrant 官方文档确认 scroll 的 `offset` 是「Start ID」，删除为软删除位图，游标按 id 续扫**不报错**；本地为物理删除 + 插入序（9.3），无法从已删点之后定位「下一个插入位置」，对齐需引入 tombstone/软删除（成本高、收益低）。故本地保留报错、README「已知差异」声明 | M3 |
+| Q16 | **M3 校准清单**：`score` 换算表（9.2）、`should` 语义（9.6 / C7）、`text` 子串近似（9.6 / C9）、`values_count` 对对象取键数（9.6）、`score_threshold` 边界（Q7）、`is_null` / `is_empty` 缺字段行为（9.6） | 本地按「合理推断」定稿的语义，需用真实 Qdrant 逐条比对 | ✅ **已闭环（2026-10-25）**：CI integration 作业对真实 Qdrant v1.14.0 跑全套 C1–C16（含 C7 `should`、C9 `text`、C15 四度量 `score` 换算、C16 `values_count`/`is_empty`/`geo`），两次运行全绿；C6 阈值、C11/C16 缺字段、C14 错误种类此前已实测校准。校准清单全部核验完毕 | M3 |
 
 > 每条定稿后，把结论并入正文并在「变更记录」留痕；`|` 不允许长期悬挂超过一个里程碑。
 
@@ -1522,7 +1525,7 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | Qdrant JSON 联合形状与 derive 不符 | 编解码错误、静默丢条件 | 手写编解码 + 双向往返测试 + 一致性测试 C7–C10 | 已缓解（ADR-3） |
 | 本地后端距离语义与 Qdrant 不一致 | 一致性测试 C15 失败、用户信任受损 | Q6 已定稿（ADR-15）；M2 已固化黄金值并做容差比对（10 节） | 部分缓解（M2 为**解析式手算**黄金值，M3 必须用真实 Qdrant 复核） |
 | **本库 `score` 与 Qdrant `score` 的换算未实测（M2 新增）** | Cosine / Dot 两个「相似度型」度量与 Qdrant 反号（9.2），若 M3 实测不符，C6/C15 与 README 全部要改 | 9.2 已把换算关系写成表格并在 README 预告；M3 用真实 Qdrant 对同批数据做数值比对（登记为 **Q16**） | 待处理（M3 必须闭环，不可拖过 M3） |
-| **本地后端的复杂度与内存特性未优化（B1/B2/B7）** | 批量删除 O(k·n)、`scroll` 全量 materialize、`search` 全量排序 | 已登记 **19 节**（B1/B2/B7），M4 性能批统一修；当前数据规模下不阻塞任何验收 | 待处理（已登记，M4 修） |
+| **本地后端的复杂度与内存特性未优化（B1/B2/B7）** | 批量删除 O(k·n)、`scroll` 全量 materialize、`search` 全量排序 | **B1 已修（2026-10-25，v1.14）**：删除降为一次扫描 + 单次重建（O(n)），见 19 节；B2/B7 维持 backlog（M5 发布前评估，不阻塞验收） | B1 已解决；B2/B7 待评估 |
 | 过滤路径语义差异引发误用 | 用户排查困难 | 不支持形式显式报 `Unsupported`（**M2 已实现**）；9.6 已把逐个条件语义划线；README「已知差异」待 M5 落地 | 已缓解（M2） |
 | `text` 匹配在本地是子串近似，Qdrant 是分词全文 | 同一 filter 在两后端命中集合可能不同 | C9 只用「分词与子串结论一致」的样本；差异写入 README「已知差异」（M5） | 已缓解（M2，采样本规避） |
 | Docker 集成测试在 CI 上不稳定 / 本机无 Docker | 阻塞合并、M3 无法起步 | 集成作业与单元作业分离、可跳过；本地用 HTTP 桩（已实测可行） | 已缓解（ADR-12） |
@@ -1564,12 +1567,12 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 
 **来源**：M2 完成后的代码审查（2026-10-15）。语义类未决问题不在这里，在 15 节（Q14–Q16）。
 
-### 19.1 工程性待办（均**未修**）
+### 19.1 工程性待办（B1/B8 已解决，其余未修）
 
 | # | 问题 | 影响 | 建议修法 | 建议时机 |
 | --- | --- | --- | --- | --- |
-| B1 | [memory.mbt](file:///d:/Moonbit/moonbit-Qdrant/src/local/memory.mbt) 的 `delete_points` / `delete_by_filter` 每删一个点就整表重建索引，复杂度 O(k·n) | 删 k 个点要做 k 次全表重建；按 filter 批量删除（真实用法）时最明显。9.1 按「单次删除」论证复杂度，未覆盖批量场景 | 改为「一次扫描出**保留**数组 + 重建一次 index」，降回 O(n) | M4（性能批） |
-| B2 | `scroll` 先把**全部**命中点 materialize 进数组再截页 | 即使 `limit=1` 也 O(n) 扫描 + O(m) 内存；掩盖了与远端流式分页的内存特性差距 | 填满一页后**再多探一个命中点**来判定 `next_offset`，内存降到 O(limit) | M4 |
+| ~~B1~~ | ~~[memory.mbt](file:///d:/Moonbit/moonbit-Qdrant/src/local/memory.mbt) 的 `delete_points` / `delete_by_filter` 每删一个点就整表重建索引，复杂度 O(k·n)~~ | ~~删 k 个点要做 k 次全表重建；按 filter 批量删除（真实用法）时最明显。9.1 按「单次删除」论证复杂度，未覆盖批量场景~~ | ✅ **已解决（2026-10-25，v1.14）**：改为「一次扫描出**保留**数组 + 重建一次 index」，降回 O(n)；两处删除共用同法，保持插入序（`conformance` C12/C13 全绿） | 已解决 |
+| B2 | `scroll` 先把**全部**命中点 materialize 进数组再截页 | 即使 `limit=1` 也 O(n) 扫描 + O(m) 内存；掩盖了与远端流式分页的内存特性差距 | 填满一页后**再多探一个命中点**来判定 `next_offset`，内存降到 O(limit) | M5（发布前评估） |
 | B3 | 过滤求值对每个点、每个条件都重新 `parse_path`（n×m 次字符串解析） | 纯性能问题；且使临界区内**必然**存在 `raise` 路径（`Unsupported`），削弱 9.4「临界区尽量无异常」的可控性 | 进入临界区前把 `Filter` **预编译**成「段列表 + 条件」结构（一次解析）；求值阶段不再解析、不再 raise。同时解决 B4 的一半 | M4（与 B4 同批） |
 | B4 | 「临界区内不含 `suspend` 点」目前只是注释 + review 约定，**没有编译期护栏** | 9.4 的原子性承诺可被一次无心的 `await` 静默破坏（且失败路径可能绕过 `defer` 释放） | 引入 `with_lock` 式 helper，**只接受同步闭包**（闭包类型不含 async），把该约束变成类型强制 | M4 |
 | B5 | `payload_or_empty` 对「无 payload 的点」每次求值都新建空 `Map` | 批量过滤时的分配抖动（无正确性问题） | 求值入口统一折叠为共享的只读空表 | M4（与 B3 同批） |
