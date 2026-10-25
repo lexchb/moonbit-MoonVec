@@ -1389,9 +1389,10 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | # | 发现 | 说明 |
 | --- | --- | --- |
 | 1 | `examples` 作为 executable 包需 `pkgtype(kind: "executable")` 且依赖 `moonbitlang/async` | `async fn main` 依赖 async 运行时；不写 `pkgtype` 会报找不到 `main` 入口 |
-| 2 | 示例包中 `Json` 不必显式 import `moonbitlang/core/json` | core 的公共 API（`Payload`/`Filter` 编解码）已带出 `Json` 类型，显式 import 会触发 `unused_package` 告警；与 local 测试同例 |
-| 3 | 字符串插值内嵌 `match` 会解析失败（`Parse error, unexpected token`） | 先在外部求值再插值（`let result_text = match ..`） |
-| 4 | `PointId` / `UpsertResult` 无 `Show` | 示例须手写 `id_text` / 模式匹配转文本；`\{hit.id}` 直接插值编译失败（记入 16.1 已有条目的现实印证） |
+| 2 | 示例包须显式 `supported_targets = "+native"` | **CI 实测（2026-10-25）**：不加时 `moon check --target wasm-gc` 报 `[4021] Value run_async_main not found in package moonbitlang/async`——async 0.22.1 的 `run_async_main` 只有 `native`/`js` 两个 cfg，无 wasm 版本；wasm-gc 检查会把示例包纳入编译面而失败。async 官方 examples/cat 同样用 `+native` |
+| 3 | 示例包中 `Json` 不必显式 import `moonbitlang/core/json` | core 的公共 API（`Payload`/`Filter` 编解码）已带出 `Json` 类型，显式 import 会触发 `unused_package` 告警；与 local 测试同例 |
+| 4 | 字符串插值内嵌 `match` 会解析失败（`Parse error, unexpected token`） | 先在外部求值再插值（`let result_text = match ..`） |
+| 5 | `PointId` / `UpsertResult` 无 `Show` | 示例须手写 `id_text` / 模式匹配转文本；`\{hit.id}` 直接插值编译失败（记入 16.1 已有条目的现实印证） |
 
 **M5 剩余项**（见 13.1 清单）：README 待补示例入口与测试计数同步、`mooncakes` 发布、CI 复核；发布需要 mooncakes 凭证（本机 `~/.moon/credentials.json` 缺失，需登录后 `moon publish`）。
 
