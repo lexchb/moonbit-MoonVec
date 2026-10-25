@@ -159,7 +159,8 @@ let store = @remote.QdrantStore::new(
 4. **Cosine 零向量约定**：任一侧模长为 0 时 `score` 固定为 `1.0`（不产生 NaN，语义为「正交 / 无相似度」）。该分支未经真实 Qdrant 复测，若不一致将在此声明。
 5. **`create_payload_index`**：本地后端为 no-op 成功（暴力检索不需要索引）。
 6. **`scroll` 顺序**：游标基于插入序，不承诺全局顺序，只承诺「不重不漏」。
-7. **wasm-gc 目标**：只保证可编译；async 测试在该目标下静默跳过，不承诺运行时行为。
+7. **`scroll` 的 `offset` 指向已删除的点时报 `InvalidArgument`**：Qdrant 对已删点采用软删除位图、`offset` 按 id 续扫不报错；本库本地后端为物理删除 + 插入序，无法从已删点之后定位「下一个插入位置」，故显式报错。翻页中途删除上页 `next_offset` 对应的点后继续翻页会触发该错误（Q15 定稿，2026-10-25）。
+8. **wasm-gc 目标**：只保证可编译；async 测试在该目标下静默跳过，不承诺运行时行为。
 
 行为对齐说明（与 Qdrant 一致，非差异）：`retrieve` 按传入 ids 顺序返回能取到的点，缺失 ID 静默跳过；写入时无 payload 的点在 `with_payload=true` 下返回 `Some(空 Map)` 而非 `None`。
 
