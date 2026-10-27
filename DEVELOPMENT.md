@@ -1080,7 +1080,7 @@ options(
 # .github/workflows/ci.yml（要点摘录）
 jobs:
   check:
-    steps: [install moon@0.1.20260920, moon fmt --check, moon check, moon info]
+    steps: [install moon@latest, moon fmt --check, moon check, moon info]
   unit:
     steps: [moon test --target native, moon test --target js, moon test --target wasm]
   integration:
@@ -1091,7 +1091,7 @@ jobs:
 
 - **集成测试必须能在没有 Docker 的开发机上跳过**：以 `QDRANT_URL` 环境变量是否存在决定是否执行，保证本地开发不被阻塞（本机即无 Docker，见 13.2）。
 - **无 Docker 时的替代验证路径**：仓库内提供 `tests/stub/qdrant_stub.py`（本地 HTTP 桩，复刻 Qdrant 的响应形状，含三种 `result` 包裹形状、404 错误体、503 重试、慢响应超时）。M0 已用这一方式完成端到端验证。
-- CI 中同时固定 MoonBit 工具链版本 **与** `async` 版本（两者必须成对）。
+- **工具链版本策略（重要）**：`async` 版本固定为 `0.22.1`（与 `moon.mod` 一致）；**MoonBit 工具链本机固定开发版本为 `0.1.20261023`**（`moonc v0.10.17+d971670cd`），**CI 无法固定具体版本**——cli.moonbitlang.com 只公开 `latest` / `nightly` 两个键，版本化路径实测 403，故 CI 安装 `latest`（nightly）并在安装后打印 `moon version --all` 供追溯（配对表见 11.1）。若 CI 与本机版本漂移导致失败，优先比对 known-good 配对表排查。
 
 ### 12.3 提交门禁（本地）
 

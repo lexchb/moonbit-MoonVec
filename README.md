@@ -21,6 +21,11 @@ moon add lexchb/moon_vector
 
 依赖 `moonbitlang/async@0.22.1`。
 
+### 工具链版本
+
+- **本机开发版本（固定）**：`moon 0.1.20261023 (3778465)` / `moonc v0.10.17+d971670cd`。项目按此版本开发与验证，升级工具链前须跑全量测试。
+- **CI（无法固定版本）**：MoonBit 官方 CDN（cli.moonbitlang.com）只提供 `latest` / `nightly` 两个下载键，无版本化路径（实测 403），故 CI 安装 `latest` 并在日志中打印 `moon version --all` 供追溯。若 CI 与本地版本漂移导致失败，以 [DEVELOPMENT.md 11.1](DEVELOPMENT.md#111-模块配置) 的 known-good 配对表为排查基准。
+
 ## 运行示例（无需 Docker）
 
 仓库自带一个完整可运行的本地后端示例（建集合 → 写入 → 检索 → 过滤 → 分页 → 删除 + 批量写入门面），不依赖任何外部服务：
