@@ -11,7 +11,7 @@
 | 对应申报书 | PROPOSAL.md |
 | 模块名 | `lexchb/moon_vector`（Q2 已定稿，见 15 节） |
 | 许可证 | Apache-2.0 |
-| 已验证工具链 | `moon 0.1.20260920` / `moonc 0.10.14` + `moonbitlang/async 0.22.1`（详见 13.2） |
+| 已验证工具链 | 本机：`moon 0.1.20261023 (3778465)` / `moonc v0.10.17+d971670cd` + `moonbitlang/async 0.22.1`（详见 13.2）；CI：nightly `latest`（版本无法固定，见 11.1 配对表） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
 | 当前进度 | M0–M4 已完成（M4 见 13.7：native 49/49，js/wasm 各 48/48；v1.12 已完成 M3 真实 Qdrant 复核与 CI 上线）；**M5 发布进行中（见 13.8）** |
 
@@ -115,7 +115,7 @@
 版本约定：
 
 - Qdrant REST API：以 **v1.14 系列** 的 OpenAPI 为准，锁定为 `REST v2` 语义；`points/search` 视为**已弃用**，主路径走 `points/query`。README 须声明最低 Qdrant 版本（1.10+，因 `query` 端点）。
-- MoonBit 工具链：**锁定 `moon 0.1.20260920` / `moonc 0.10.14`**（本机实测可用版本），写入 CI 配置；版本变更必须先跑全量测试。
+- MoonBit 工具链：本机锁定 `moon 0.1.20261023 (3778465)` / `moonc v0.10.17+d971670cd`（2026-10-23 安装）；**CI 无法固定版本**（cli.moonbitlang.com 只公开 `latest` / `nightly`，版本化路径 403，见 11.1），只能装 `latest` 并打印 `moon version --all` 供追溯。版本变更必须先跑全量测试。
 - `moonbitlang/async`：**锁定 `0.22.1`**。已实测 0.22.5（晚于本机工具链 20 余天）无法构建，故**不得使用 `moon add` 的默认最新版**，必须在 `moon.mod` 中显式写死版本。升级 `async` 必须与工具链同批升级并跑全量测试。
 - 语义化版本：本库自身遵循 SemVer 2.0.0（mooncakes 要求）。
 
@@ -966,6 +966,17 @@ options(
 - **模块名首段必须是发布者自己的 mooncakes 账号名**（官方文档明确要求 `<你的账号>/<模块名>`）。本机已登录账号为 **`lexchb`**（名下已有 `memcached`、`moonbit-texteditor`），故定为 `lexchb/moon_vector`。Q2 详见 15 节。
 - 申报书中的 `moonbit-community/moon_vector` **不可直接发布**：`moonbit-community` 是官方社区组织命名空间（索引中有 106 个包，含 `rabbita`、`elasticsearch` 等），但官方文档未提供自助加入或向他人命名空间发布的方式。**该行已回写为 `lexchb/moon_vector`（Q13，2026-10-18，见 13.3）**。
 - 若将来通过社区流程加入该组织，模块名可迁移为 `moonbit-community/moon_vector`；由于 `moon add` 按模块名寻址，迁移只需同步 README 与本文档，不影响已发布版本。
+
+**Known-good 工具链配对表**（11.1 版本约定 / ci.yml 注释的落地；CI 每次运行打印 `moon version --all` 供追溯，下表以实测为准）：
+
+| 时间 | 位置 | moon | moonc | async | 状态 |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-22（M3 复核） | CI（nightly） | 当时 nightly | 当时 nightly | 0.22.1 | 全绿（integration 真实 Qdrant 首次跑通） |
+| 2026-10-25 | CI（nightly） | 最新 nightly | 最新 nightly | 0.22.1 | 全绿；曾因示例包缺 `supported_targets = "+native"` 触发 wasm-gc `run_async_main` 缺失（13.8 事故 #2），修复后通过 |
+| 2026-10-25 | 本机 | 0.1.20261023 (3778465) | v0.10.17+d971670cd | 0.22.1 | 全绿（native 50/50，js/wasm 48/48） |
+| 2026-10-27 | 本机（当前） | 0.1.20261023 (3778465) | v0.10.17+d971670cd | 0.22.1 | 全绿（含 Q15 专项用例，fmt 已修复） |
+
+> **使用说明**：CI 无法锁定具体版本（CDN 只公开 `latest`/`nightly`），配对表的作用是「漂移诊断」——CI 失败时先比对本次运行日志的 `moon version` 与上表；若不在 known-good 内，优先怀疑工具链与 async 0.22.1 的兼容性（参考 11.1 版本约定）。
 
 ### 11.2 包配置
 
