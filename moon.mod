@@ -10,6 +10,8 @@ keywords = [ "vector", "embedding", "qdrant", "rag", "semantic-search" ]
 
 description = "Type-safe vector search client (Qdrant REST) and in-memory backend for MoonBit"
 
+repository = "https://github.com/lexchb/moonbit-MoonVec.git"
+
 import {
   "moonbitlang/async@0.22.1",
 }
