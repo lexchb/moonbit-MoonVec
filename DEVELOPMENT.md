@@ -13,7 +13,7 @@
 | 许可证 | Apache-2.0 |
 | 已验证工具链 | 本机：`moon 0.1.20261023 (3778465)` / `moonc v0.10.17+d971670cd` + `moonbitlang/async 0.22.1`（详见 13.2）；CI：nightly `latest`（版本无法固定，见 11.1 配对表） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
-| 当前进度 | M0–M4 已完成（M4 见 13.7：native 49/49，js/wasm 各 48/48；v1.12 已完成 M3 真实 Qdrant 复核与 CI 上线）；**M5 发布进行中（见 13.8）** |
+| 当前进度 | M0–M4 已完成（当前全绿：native 50/50，js/wasm 各 48/48，见 11.1 known-good 表；v1.12 已完成 M3 真实 Qdrant 复核与 CI 上线）；**M5 发布进行中（见 13.8）** |
 
 > 包路径勘误（v1.4）：MoonBit 的包名是「模块名 + 目录路径」，因此 `src/core` 的真实包名是
 > **`lexchb/moon_vector/src/core`**（而不是 v1.3 里写的 `lexchb/moon_vector/core`）。

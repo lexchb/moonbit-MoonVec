@@ -11,7 +11,7 @@ MoonBit 生态此前没有任何向量检索客户端。要在 MoonBit 中构建
 - **本地内存后端**：暴力 kNN，四种度量（cosine / euclid / dot / manhattan），统一「分数越小越近」语义；`@async.Mutex` 内部串行化保证并发写安全；零外部依赖，可在 native / js / wasm 上运行。
 - **远端后端**：Qdrant REST v2，支持 HTTPS 与 api-key，内置超时、指数退避重试与具名错误映射。
 - **具名错误体系**：`VectorStoreError`（Timeout / Transport / Http / Server / Decode / NotFound / Conflict / Auth / RateLimited / InvalidArgument / Unsupported），两个后端共用。
-- **一致性测试套件 C1–C16**：对任意 `VectorStore` 实现都通过的共享断言，保证两个后端行为不漂移；单元测试 native 49 / js 48 / wasm 48 项全部通过，0 warning。
+- **一致性测试套件 C1–C16**：对任意 `VectorStore` 实现都通过的共享断言，保证两个后端行为不漂移；单元测试 native 50 / js 48 / wasm 48 项全部通过，0 warning。
 
 ## 安装
 
@@ -178,7 +178,7 @@ let store = @remote.QdrantStore::new(
 ## 测试
 
 - 一致性测试套件 **C1–C16**：对任意 `VectorStore` 实现通过的共享断言，local / remote 两端共用，防止行为漂移。
-- 单元测试：native **49** / js **48** / wasm **48** 项全部通过，0 warning（wasm-gc 下 async 测试静默跳过）。
+- 单元测试：native **50** / js **48** / wasm **48** 项全部通过，0 warning（wasm-gc 下 async 测试静默跳过）。
 - 远端后端通过 `tests/stub` 的本地桩验证（native-only）；CI 另跑真实 Qdrant 容器（v1.14.0）集成作业。
 
 ## 参考与规范来源

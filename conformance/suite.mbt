@@ -1177,7 +1177,7 @@ async fn check_c15(
 }
 
 ///|
-/// 跑完整套 C1–C15。返回失败消息列表（空列表 = 全绿）。
+/// 跑完整套 C1–C16。返回失败消息列表（空列表 = 全绿）。
 pub async fn run_conformance(
   store : &@core.VectorStore,
   name_prefix : String,

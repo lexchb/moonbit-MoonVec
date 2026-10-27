@@ -45,7 +45,7 @@ fn join_lines(lines : Array[String]) -> String {
 }
 
 ///|
-async test "remote：一致性套件 C1–C15" {
+async test "remote：一致性套件 C1–C16" {
   let url = qdrant_url()
   // 无桩 / 无 Qdrant 时跳过（12.2：集成测试可跳过），保证本地无 Docker 也能跑 `moon test`
   if false == reachable(url) {

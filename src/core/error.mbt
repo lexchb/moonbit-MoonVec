@@ -20,7 +20,7 @@ pub(all) suberror VectorStoreError {
   Conflict(message~ : String)
   /// 鉴权失败
   Auth(message~ : String)
-  /// 被限流；若响应带 Retry-After 则填入毫秒数
+  /// 被限流；若响应带 Retry-After 则填入毫秒数（当前 transport 层不解析该头，恒为 None）
   RateLimited(retry_after_ms~ : Int32?)
   /// 调用方参数非法（如向量维度不匹配）
   InvalidArgument(message~ : String)

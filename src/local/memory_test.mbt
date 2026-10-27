@@ -89,7 +89,7 @@ async test "MemoryStore：错误可用具名 suberror 精确分辨" {
 }
 
 ///|
-async test "一致性套件 C1–C15：local 后端全绿" {
+async test "一致性套件 C1–C16：local 后端全绿" {
   let store : &@core.VectorStore = @local.MemoryStore::new()
   let failures = @conformance.run_conformance(store, "local_conformance")
   if failures.length() > 0 {
