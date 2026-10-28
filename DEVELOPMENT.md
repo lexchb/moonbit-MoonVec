@@ -13,7 +13,7 @@
 | 许可证 | Apache-2.0 |
 | 已验证工具链 | 本机：`moon 0.1.20261023 (3778465)` / `moonc v0.10.17+d971670cd` + `moonbitlang/async 0.22.1`（详见 13.2）；CI：nightly `latest`（版本无法固定，见 11.1 配对表） |
 | 已验证目标 | `native` / `js` / `wasm`（`wasm-gc` 仅能编译，`async test` 不执行，见 13.3） |
-| 当前进度 | M0–M4 已完成（当前全绿：native 50/50，js/wasm 各 48/48，见 11.1 known-good 表；v1.12 已完成 M3 真实 Qdrant 复核与 CI 上线）；**M5 发布进行中（见 13.8）** |
+| 当前进度 | **M0–M5 全部完成**（当前全绿：native 50/50，js/wasm 各 48/48，见 11.1 known-good 表）：v0.1.0 已发布 mooncakes.io（2026-10-27，build_status=success），CI 三作业全绿，13.1 验收清单已全部勾选（2026-10-28 复核，含临时项目 `moon add` 端到端实测） |
 
 > 包路径勘误（v1.4）：MoonBit 的包名是「模块名 + 目录路径」，因此 `src/core` 的真实包名是
 > **`lexchb/moon_vector/src/core`**（而不是 v1.3 里写的 `lexchb/moon_vector/core`）。
@@ -1106,20 +1106,20 @@ jobs:
 | **M0 技术验证** | 工具链能力探明 | ✅ **已完成**（见 13.2）：① trait 中 `async fn` 可行性 → 支持；② `PointId` / `MatchValue` 手写编解码 → 可行；③ native 下 `@http` 端到端 → 可行（用本地桩替代真实 Qdrant）；④ 本文档第 2.3 / 6 / 7 / 8 / 11 / 12 节已按实测回填 |
 | **M1 core 抽象层** | 类型、Filter DSL、错误、trait | ✅ **已完成**（见 13.4）：类型全部就位；Filter 编解码往返测试通过；`moon test` 在 native/js/wasm 均 24/24；`.mbti` 已生成；`extend` 声明齐备（0 warning） |
 | **M2 local 后端** | 暴力 kNN + 过滤求值 + 分页 + `@async.Mutex` 串行化 | ✅ **已完成**（见 13.5）：C1–C15 全绿（套件对 local 跑通）；距离数值与手算黄金值在容差内一致；native/js/wasm 各 **43/43**；0 warning |
-| **M3 remote 后端** | 端点映射、传输层、错误映射 | ✅ **已完成**（见 13.6）：对本地桩跑通 C1–C15 全流程；重试/超时/状态码映射已在 transport.mbt 实现（专项断言待桩就绪后补，见 19 节）；native 44/44，js/wasm 43/43（remote 被排除） |
+| **M3 remote 后端** | 端点映射、传输层、错误映射 | ✅ **已完成**（见 13.6）：对本地桩跑通一致性套件全流程（M3 时点位 C1–C15，后经 Q15/Q16 扩展为 C1–C16）；重试/超时/状态码映射已在 transport.mbt 实现（专项断言待桩就绪后补，见 19 节）；native 44/44，js/wasm 43/43（remote 被排除） |
 | **M4 批量与并发** | 批次写入/检索门面（`batch_write` / `batch_search`，`@async` 有界并发） | ✅ **已完成**（见 13.7）：并发度可配；失败传播经返回元组精确上抛并有测试；`MemoryStore` 的 `@async.Mutex` 串行化正确性已有 `lock_wbtest` + `batch_test` 覆盖；native 49/49、js/wasm 48/48 |
-| **M5 发布** | README、示例、CI、mooncakes | 示例可一键跑通（local 示例不依赖 Docker）；CI 三个作业全绿；发布 v0.1.0；仓库 ≥10 个有效 commit |
+| **M5 发布** | README、示例、CI、mooncakes | ✅ **已完成**：示例可一键跑通（local 示例不依赖 Docker）；CI 三个作业全绿；v0.1.0 已发布 mooncakes.io（2026-10-27）；仓库 58 个有效 commit（2026-10-28）；13.1 清单全勾 |
 
 ### 13.1 最终验收清单（对应申报书「预期验收产物」）
 
-- [ ] `lexchb/moon_vector` 可通过 `moon add` 引入
-- [ ] 发布到 mooncakes.io 且版本号为 SemVer
-- [ ] README 含：快速开始、API 概览、已知差异、并发说明、最低 Qdrant 版本、API 规范来源声明
-- [x] 至少一个可运行示例（local 后端，无需 Docker）—— `examples/local_demo`，`moon run examples/local_demo` 一键跑通（13.8）
-- [ ] 单元测试 + 一致性测试 + 集成测试（Docker 优先，本地桩兜底）
-- [ ] GitHub Actions 覆盖 `moon check` / `moon test` / 集成测试，且工具链与 `async` 版本成对锁定
+- [x] `lexchb/moon_vector` 可通过 `moon add` 引入 —— 2026-10-28 实测：临时空项目 `moon add lexchb/moon_vector` 成功解析 `@0.1.0`
+- [x] 发布到 mooncakes.io 且版本号为 SemVer —— v0.1.0 已发布（2026-10-27，registry 侧 build_status=success）
+- [x] README 含：快速开始、API 概览、已知差异、并发说明、最低 Qdrant 版本、API 规范来源声明
+- [x] 至少一个可运行示例（local 后端，无需 Docker）—— `examples/local_demo`，`moon run examples/local_demo` 一键跑通（13.8；2026-10-28 复跑确认）
+- [x] 单元测试 + 一致性测试 + 集成测试（Docker 优先，本地桩兜底）—— 2026-10-28 实测 native 50/50、js 48/48、wasm 48/48，0 warning；C1–C16 对 local 全绿；CI 集成作业对真实 Qdrant v1.14.0 容器跑通同一套件
+- [x] GitHub Actions 覆盖 `moon check` / `moon test` / 集成测试，且工具链与 `async` 版本成对锁定 —— ci.yml 三作业（check / unit / integration）最近连续 6 次全 success（截至 2026-10-27）；known-good 配对表见 11.1
 - [x] Apache-2.0 `LICENSE` 存在
-- [x] 仓库 ≥10 个有效 commit
+- [x] 仓库 ≥10 个有效 commit —— 58 个（2026-10-28）
 
 ### 13.2 M0 验证记录（2026-10-14，已完成）
 
@@ -1408,7 +1408,7 @@ examples/local_demo/main.mbt   # 建集合→写→搜→过滤→分页→批�
 | 4 | 字符串插值内嵌 `match` 会解析失败（`Parse error, unexpected token`） | 先在外部求值再插值（`let result_text = match ..`） |
 | 5 | `PointId` / `UpsertResult` 无 `Show` | 示例须手写 `id_text` / 模式匹配转文本；`\{hit.id}` 直接插值编译失败（记入 16.1 已有条目的现实印证） |
 
-**M5 剩余项**（见 13.1 清单）：README 待补示例入口与测试计数同步、`mooncakes` 发布、CI 复核；发布需要 mooncakes 凭证（本机 `~/.moon/credentials.json` 缺失，需登录后 `moon publish`）。
+**M5 完成记录（2026-10-27 发布，2026-10-28 复核）**：README 示例入口与测试计数已同步（C1–C16 / native 50 / js / wasm 48）；v0.1.0 已通过 `moon publish` 发布至 mooncakes.io（registry 侧 build_status=success）；CI 三作业（check / unit / integration）最近连续 6 次全 success；凭证已就位（`~/.moon/credentials.json`，账号 `lexchb`）；13.1 验收清单已全部勾选，临时空项目 `moon add lexchb/moon_vector` 端到端实测成功。
 
 **Q15 / Q16 定稿（2026-10-25，风险审计后续）**：Q16 经 CI integration 对真实 Qdrant 跑全套 C1–C16 两次全绿后闭环（score 换算 / should / text / values_count 全部实测核验）；Q15 依 Qdrant 官方文档定稿为选项①（scroll 的 offset 按 id 续扫、软删除位图不报错；本地物理删除 + 插入序无法低成本对齐，保留 `InvalidArgument` 并在 README 已知差异声明）。
 
