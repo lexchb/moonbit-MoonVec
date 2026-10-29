@@ -165,7 +165,7 @@ let store = @remote.QdrantStore::new(
 5. **`create_payload_index`**：本地后端为 no-op 成功（暴力检索不需要索引）。
 6. **`scroll` 顺序**：游标基于插入序，不承诺全局顺序，只承诺「不重不漏」。
 7. **`scroll` 的 `offset` 指向已删除的点时报 `InvalidArgument`**：Qdrant 对已删点采用软删除位图、`offset` 按 id 续扫不报错；本库本地后端为物理删除 + 插入序，无法从已删点之后定位「下一个插入位置」，故显式报错。翻页中途删除上页 `next_offset` 对应的点后继续翻页会触发该错误（Q15 定稿，2026-10-25）。
-8. **wasm-gc 目标**：只保证可编译；async 测试在该目标下静默跳过，不承诺运行时行为。
+8. **wasm-gc 目标**：只保证可编译，不承诺运行时行为。本项目承诺的**三目标为 `native` / `js` / `wasm`**（三者均全量执行测试）；`wasm-gc` 是独立的第四个目标，其下 `async test` 不执行——2026-10-29 实测 `moon test --target wasm-gc` 为 **35 项同步测试通过、13 项 async 测试未执行**（`wasm` 目标为 48 项），且**退出码仍为 0**，故不能只看退出码判断该目标绿灯。根因是上游 `moonbitlang/async@0.22.1` 未提供 wasm-gc 的事件循环驱动器（`run_async_main` 仅覆盖 `native` / `js` / `wasm`），**非本项目缺陷**。
 
 行为对齐说明（与 Qdrant 一致，非差异）：`retrieve` 按传入 ids 顺序返回能取到的点，缺失 ID 静默跳过；写入时无 payload 的点在 `with_payload=true` 下返回 `Some(空 Map)` 而非 `None`。
 
